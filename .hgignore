@@ -1,0 +1,13 @@
+syntax: glob
+src/parser/dwarfidlC.g
+src/parser/dwarfidlC.tokens
+src/parser/dwarfidlCLexer.o
+src/parser/dwarfidlCParser.c
+src/parser/dwarfidlCParser.o
+src/parser/dwarfidlPy.tokens
+src/parser/dwarfidlPyLexer.py
+src/parser/dwarfidlPyParser.py
+src/parser/include/dwarfidlCLexer.h
+src/parser/include/dwarfidlCParser.h
+src/parser/makefile
+src/parser/test_parser.c
