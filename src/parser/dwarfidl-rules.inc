@@ -10,7 +10,7 @@ include(dwarfidl-tokens.inc)
 /* utility code -- defined here, shared by Cake */
 memberNameExpr      : definiteMemberName -> ^( DEFINITE_MEMBER_NAME definiteMemberName )
                     | KEYWORD_VOID^ /* means "actually, no member" */
-                    | INDEFINITE_MEMBER_NAME^ 
+                    | INDEFINITE_MEMBER_NAME -> ANY_VALUE 
                     ;
 
 /* DWARF version */
@@ -119,6 +119,7 @@ dwarfMultiValueDescription : '(' optionallyNamedValueDescription (',' optionally
                            ;
 
 optionallyNamedValueDescription     : (namedValueDescription)=>namedValueDescription
+                                      -> ^( MEMBERSHIP_CLAIM namedValueDescription ) 
                                     | m4_value_description_production
                                     ;
 
