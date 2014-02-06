@@ -1,8 +1,11 @@
-default: src #lib #test
+default: src lib #test
 
 .PHONY: src
 src:
 	$(MAKE) -C src
+
+lib: src
+	mkdir -p lib && cd lib && ln -sf ../src/libdwarfidl.a .
 
 .PHONY: clean
 clean:

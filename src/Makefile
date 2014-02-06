@@ -10,6 +10,8 @@ LDLIBS := -lantlr3c
 LDLIBS += -lcxxgen -ldwarfpp -ldwarf -lelf
 LDLIBS += -lsrk31c++ -lc++fileno -lboost_filesystem -lboost_regex -lboost_system -lboost_serialization
 
+LDFLAGS += -L.
+
 CXXFLAGS += -Iparser/include -I../include
 CXXFLAGS += -g3 -O0 -Wall -std=c++0x 
 
@@ -17,7 +19,7 @@ CXXFLAGS += -g3 -O0 -Wall -std=c++0x
 CXXFLAGS += -Wno-deprecated-declarations
 
 .PHONY: default
-default: dwarfhpp #parser/test_parser
+default: libdwarfidl.a dwarfhpp #parser/test_parser
 
 .PHONY: clean
 clean:: 
@@ -37,8 +39,11 @@ parse: $(OBJS) parser/dwarfidlCParser.o parser/dwarfidlCLexer.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) \
 	 $(OBJS) parser/dwarfidlCParser.o parser/dwarfidlCLexer.o $(LDLIBS) -o "$@" 
 
-dwarfhpp: dwarfhpp.o cxx_model.o cxx_dependency_order.o
-	$(CXX) -o "$@" $+ $(LDFLAGS) $(LDLIBS)
+dwarfhpp: dwarfhpp.o libdwarfidl.a
+	$(CXX) -o "$@" $+ $(LDFLAGS) -ldwarfidl $(LDLIBS) 
+
+libdwarfidl.a: cxx_model.o cxx_dependency_order.o
+	$(AR) r "$@" $^
 
 # Begin parser rules 
 ANTLR_M4_PATH ?= ../../antlr-m4

@@ -10,8 +10,8 @@
 
 #include <indenting_ostream.hpp>
 #include <dwarfpp/encap.hpp>
-#include <dwarfpp/cxx_model.hpp>
-#include <dwarfpp/cxx_dependency_order.hpp>
+#include "cxx_model.hpp"
+#include "cxx_dependency_order.hpp"
 #include <srk31/algorithm.hpp>
 
 using namespace srk31;
