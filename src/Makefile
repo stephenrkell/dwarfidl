@@ -8,7 +8,8 @@ OBJS += $(patsubst %.cpp,%.o,$(SRC))
 
 LDLIBS := -lantlr3c
 LDLIBS += -lcxxgen -ldwarfpp -ldwarf -lelf
-LDLIBS += -lsrk31c++ -lc++fileno -lboost_filesystem -lboost_regex -lboost_system -lboost_serialization
+LDLIBS += -lsrk31c++ -lc++fileno 
+LDLIBS += -lboost_filesystem -lboost_regex -lboost_system -lboost_serialization
 
 LDFLAGS += -L.
 
@@ -35,7 +36,8 @@ endif
 
 #$(warning OBJS is $(OBJS))
 
-parse: $(OBJS) parser/dwarfidlCParser.o parser/dwarfidlCLexer.o
+.PHONY: parser
+parser: $(OBJS) parser/dwarfidlCParser.o parser/dwarfidlCLexer.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) \
 	 $(OBJS) parser/dwarfidlCParser.o parser/dwarfidlCLexer.o $(LDLIBS) -o "$@" 
 
@@ -53,7 +55,7 @@ export M4PATH
 GRAMMAR_OPTIONS += backtrack=true output=AST
 GRAMMAR_BASENAME := dwarfidl
 GRAMMAR_PATH := parser
-include $(ANTLR_M4_PATH)/Makerules
+-include $(ANTLR_M4_PATH)/Makerules
 
 test:: test-samples
 
