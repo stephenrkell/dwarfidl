@@ -420,12 +420,20 @@ void cycle_handler::back_edge(Edge e, Graph& g)
 		
 		auto process_one_edge
 		 = [&coming_from_pointer, &removed, &g, this, &remove_edge_if_fwddeclable](Edge e) {
-			// auto e_source_projected = source(e, g);
+			auto e_source_projected = source(e, g);
 			auto e_source_ultimate = dynamic_pointer_cast<encap::basic_die>(
 				(*e.p_ds)[e.referencing_off]).get();
-			// auto e_target_projected = target(e, g);
+			auto e_target_projected = target(e, g);
 			// auto e_target_ultimate = dynamic_pointer_cast<encap::basic_die>(
 			//	(*e.p_ds)[e.off]).get();
+
+			// if the projected source and target are the same, omit this edge
+			if (e_source_projected->get_offset() == e_target_projected->get_offset())
+			{
+				this->new_skipped_edges.push_back(e);
+				removed = true;
+				return;
+			}
 			
 			if (e_source_ultimate->get_tag() == DW_TAG_pointer_type
 			 && e.referencing_attr == DW_AT_type)
