@@ -8,6 +8,7 @@
 
 #include "cxx_model.hpp"
 #include <boost/algorithm/string.hpp>
+#include <boost/regex.hpp>
 
 using std::vector;
 using std::map;
@@ -19,6 +20,7 @@ using std::dec;
 using std::ostringstream;
 using std::deque;
 using boost::optional;
+using boost::regex;
 using std::shared_ptr;
 using std::dynamic_pointer_cast;
 using namespace dwarf::spec;
@@ -58,7 +60,7 @@ namespace tool {
 	bool 
 	cxx_generator::is_valid_cxx_ident(const string& word)
 	{
-		static const std::regex e("[a-zA-Z_][a-zA-Z0-9_]*");
+		static const regex e("[a-zA-Z_][a-zA-Z0-9_]*");
 		return !is_reserved(word) &&
 			std::move(regex_match(word, e));	
 	}
@@ -1008,18 +1010,19 @@ namespace tool {
 					
 				out << " __attribute__((aligned(" << power << ")));";
 			}
-				/*<< " static_assert(offsetof(" 
+				
+			/*<< " static_assert(offsetof(" 
 				<< name_for_type(compiler, p_type, boost::optional<const std::string&>())
 				<< ", "
 				<< protect_ident(*d.get_name())
 				<< ") == " << offset << ");" << */
+			
 			out << " // offset: " << target_offset << endl;
 		}
 		else 
 		{
-			// guess at word alignment
-			out << " __attribute__((aligned(sizeof(int))))"; 
-			out << "; // no DW_AT_data_member_location, so it's a guess" << std::endl;
+			// guess at natural alignment and hope for the best
+			out << "; // no DW_AT_data_member_location, so hope the compiler gets it right" << std::endl;
 		}
 	}
 
