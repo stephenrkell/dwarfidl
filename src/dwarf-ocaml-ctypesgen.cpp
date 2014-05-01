@@ -54,6 +54,7 @@ using dwarf::core::union_type_die;
 using dwarf::core::array_type_die;
 using dwarf::core::type_chain_die;
 using dwarf::core::base_type_die;
+using dwarf::core::qualified_type_die;
 using dwarf::spec::opt;
 
 using dwarf::lib::Dwarf_Off;
@@ -75,6 +76,7 @@ static string ocaml_type(const string& in)
 
 static string ocaml_ident(const string& in)
 {
+	if (in == "string") return "_string";
 	return boost::to_lower_copy(in);
 }
 
@@ -93,7 +95,7 @@ static pair<string, string> base_type_equiv_and_reified_name(iterator_df<base_ty
 				case 2:
 					return make_pair("int", "int16_t");
 				case 4:
-					return make_pair("int32", "int32_t");
+					return make_pair("int", "int32_t"); // HACK: 31 bits is good enough for 32
 				case 8:
 					return make_pair("int64", "int64_t");
 				default: assert(false);
@@ -102,9 +104,9 @@ static pair<string, string> base_type_equiv_and_reified_name(iterator_df<base_ty
 			switch(*t.as_a<base_type_die>()->get_byte_size())
 			{
 				case 1:
-					return make_pair("uint8", "uint8_t");
+					return make_pair("int", "uint8_t"); // HACK-ish
 				case 2:
-					return make_pair("uint16", "uint16_t");
+					return make_pair("int", "uint16_t"); // HACK-ish
 				case 4:
 					return make_pair("uint32", "uint32_t");
 				case 8:
@@ -285,11 +287,24 @@ int main(int argc, char **argv)
 		}
 		else if (t.is_a<pointer_type_die>())
 		{
-			return equiv_for_type(t.as_a<pointer_type_die>()->find_type()) + " ptr";
+			auto target_t = t.as_a<pointer_type_die>()->find_type();
+			auto unq_target_t = target_t ? target_t->get_unqualified_type() : target_t;
+			if (unq_target_t && unq_target_t.is_a<base_type_die>()
+				&& unq_target_t.as_a<base_type_die>()->get_encoding() == DW_ATE_signed_char
+				&& *unq_target_t.as_a<base_type_die>()->get_byte_size() == 1)
+			{
+				// it's a signed char, so return string
+				return "string";
+			}
+			else return equiv_for_type(target_t) + " ptr";
 		}
 		else if (t.is_a<base_type_die>())
 		{
 			return base_type_equiv_and_reified_name(t.as_a<base_type_die>()).first;
+		}
+		else if (t.is_a<qualified_type_die>())
+		{
+			return equiv_for_type(t->get_unqualified_type());
 		}
 		assert(false);
 	};
@@ -321,8 +336,8 @@ int main(int argc, char **argv)
 		assert(false);
 	};
 
-	std::function<opt<string>(iterator_df<type_die>)> reified_type_name
-	 = [&reified_type_name](iterator_df<type_die> t) -> opt<string> {
+	std::function<string(iterator_df<type_die>)> reified_type_name
+	 = [&reified_type_name](iterator_df<type_die> t) -> string {
 		if (!t)
 		{
 			return ocaml_ident("void");
@@ -338,15 +353,22 @@ int main(int argc, char **argv)
 		}
 		else if (t.is_a<pointer_type_die>())
 		{
-			opt<string> target_reified = reified_type_name(t.as_a<pointer_type_die>()->find_type());
-			if (target_reified) return ocaml_ident("ptr_to_" + *target_reified);
-			else return opt<string>();
+			auto target_t = t.as_a<pointer_type_die>()->find_type();
+			auto unq_target_t = target_t ? target_t->get_unqualified_type() : target_t;
+
+			string target_reified = reified_type_name(target_t);
+			return ocaml_ident("ptr_to_" + target_reified);
 		}
 		else if (t.is_a<base_type_die>())
 		{
 			return base_type_equiv_and_reified_name(t.as_a<base_type_die>()).second;
 		}
-		return opt<string>();
+		else if (t.is_a<qualified_type_die>())
+		{
+			// just emit the name of the unqualified type
+			return reified_type_name(t->get_unqualified_type());
+		}
+		assert(false);
 	};
 	
 	std::function<string(iterator_df<type_die>)> reified_type_expr
@@ -363,8 +385,8 @@ int main(int argc, char **argv)
 		}
 		else if (t.is_a<typedef_die>())
 		{
-			// repeat the definition of the target type
-			return reified_type_expr(t.as_a<typedef_die>()->find_type());
+			// *name* the target type
+			return reified_type_name(t.as_a<typedef_die>()->find_type());
 		}
 		else if (t.is_a<base_type_die>())
 		{
@@ -373,8 +395,17 @@ int main(int argc, char **argv)
 		}
 		else if (t.is_a<pointer_type_die>())
 		{
+			auto target_t = t.as_a<pointer_type_die>()->find_type();
+			auto unq_target_t = target_t ? target_t->get_unqualified_type() : target_t;
+			if (unq_target_t && unq_target_t.is_a<base_type_die>()
+				&& unq_target_t.as_a<base_type_die>()->get_encoding() == DW_ATE_signed_char
+				&& *unq_target_t.as_a<base_type_die>()->get_byte_size() == 1)
+			{
+				// it's a signed char, so return Ctypes.string
+				return "string";
+			}			
 			/* ctypes already has our names */
-			return "ptr " + reified_type_expr(t.as_a<pointer_type_die>()->find_type());
+			return "ptr " + reified_type_name(t.as_a<pointer_type_die>()->find_type());
 		}
 		assert(false);
 	};
@@ -394,7 +425,7 @@ int main(int argc, char **argv)
 	cout << "open Signed" << endl;
 	cout << "open Unsigned" << endl;
 	cout << "open Foreign" << endl << endl;
-	dwarf::core::type_map<string> emitted;
+	dwarf::core::type_set emitted;
 	dwarf::core::type_set finished_emitting;
 	
 	for (auto i_t = types.begin(); i_t != types.end(); ++i_t)
@@ -409,13 +440,13 @@ int main(int argc, char **argv)
 			cout << "let " << name << " : " << name << " " + keyword + " typ"
 				<< " = " << ((keyword == "union") ? "union" : "structure") 
 				<< " \"" << name << "\"" << endl;
-			emitted.insert(make_pair(*i_t, name));
+			emitted.insert(*i_t);
 		}
 		// if it's a base type, it's already defined by ctypes. 
 		// we just note its reified name in -- HACK -- emitted
 		if (i_t->is_a<base_type_die>())
 		{
-			emitted.insert(make_pair(*i_t, base_type_equiv_and_reified_name(*i_t).second));
+			emitted.insert(*i_t);
 		}
 	}
 	
@@ -434,17 +465,17 @@ int main(int argc, char **argv)
 				{
 					if (finished_emitting.find(t) == finished_emitting.end())
 					{
-						opt<string> reified_name = reified_type_name(t);
-						assert(reified_name);
+						string reified_name = reified_type_name(t);
 
 						string equiv = equiv_for_type(t.as_a<typedef_die>()->find_type());
 						//cout << "type " << ocaml_type(*t.name_here()) 
 						//	<< " = " << equiv << endl;
 						// reify the typedef as well
-						cout << "let " << *reified_name
+						cout << "let " << reified_name
 						// << " : " << reified_type_typ(t) << " typ"
-						 << " = " << (assert(emitted.find(t.as_a<typedef_die>()->find_type()) != emitted.end()), 
-							emitted[t.as_a<typedef_die>()->find_type()])
+						 << " = " 
+						 << (assert(emitted.find(t.as_a<typedef_die>()->find_type()) != emitted.end()), 
+							reified_type_name(t.as_a<typedef_die>()->find_type()))
 						 << endl;
 					} 
 					else
@@ -463,52 +494,53 @@ int main(int argc, char **argv)
 
 				/* We emit two things: the "OCaml equivalent" (equiv) and the "definition". */
 				// if we haven't emitted this one already...
-				if (finished_emitting.find(t) == finished_emitting.end())
+				// *and* if it's not a qualified type (which we ignore)
+				if (t && 
+					finished_emitting.find(t) == finished_emitting.end() &&
+					t == t->get_unqualified_type()
+					)
 				{
 					cerr << "Emitting " << *t
 					<< " for reason " << (reason ? reason->summary() : "(initial reason)") << endl;
-					opt<string> reified_name = reified_type_name(t);
-					if (reified_name)
-					{
-						// if it's a struct, we emitted some stuff earlier
-						if (t.is_a<with_data_members_die>())
-						{
-							/* define each field, then "seal" the whole thing. */
-							auto members = t.as_a<with_data_members_die>().children().subseq_of<member_die>();
-							for (auto i_memb = members.first; i_memb != members.second; ++i_memb)
-							{
-								string field_name = *reified_name
-									 + "_" + ocaml_ident(*i_memb.base().base().name_here());
-								//opt<string> opt_field_type_name = reified_type_name(
-								//	i_memb->find_type());
-								auto memb_t = i_memb->find_type();
-								auto found_pair = emitted.find(memb_t);
-								assert(found_pair != emitted.end()); // since we are post-emitting
-								string field_type_name = found_pair->second;
-								cout << "let " << field_name << " = field " << *reified_name 
-									<< " \"" << ocaml_ident(*i_memb.base().base().name_here()) << "\" " 
-									<< field_type_name << endl;
-							}
-							cout << "let () = seal " << *reified_name << endl;
-						}
-						else if (t.is_a<pointer_type_die>())
-						{
-							opt<string> opt_reified_name = reified_type_name(t);
-							assert(opt_reified_name);
-							auto pointee_type = t.as_a<pointer_type_die>()->find_type();
-							// cout << "type " << *opt_reified_name << endl;
-							cout << "let " << *opt_reified_name 
-								//<< " : " << reified_type_typ(pointee_type) << " ptr typ"
-								<< " = ptr " << *reified_type_name(pointee_type) << endl;
-						}
+					string reified_name = reified_type_name(t);
 
-						// we inserted the with_data_memberses when we forward-declared them
-						if (!t.is_a<with_data_members_die>())
+					// if it's a struct, we emitted some stuff earlier
+					if (t.is_a<with_data_members_die>())
+					{
+						/* define each field, then "seal" the whole thing. */
+						auto members = t.as_a<with_data_members_die>().children().subseq_of<member_die>();
+						for (auto i_memb = members.first; i_memb != members.second; ++i_memb)
 						{
-							emitted.insert(make_pair(t, *reified_name));
+							string field_name = reified_name
+								 + "_" + ocaml_ident(*i_memb.base().base().name_here());
+							//opt<string> opt_field_type_name = reified_type_name(
+							//	i_memb->find_type());
+							auto memb_t = i_memb->find_type();
+							assert(emitted.find(memb_t) != emitted.end()); // since we are post-emitting
+							string field_type_name = reified_type_name(memb_t);
+							cout << "let " << field_name << " = field " << reified_name 
+								<< " \"" << ocaml_ident(*i_memb.base().base().name_here()) << "\" " 
+								<< field_type_name << endl;
 						}
-						finished_emitting.insert(t);
+						cout << "let () = seal " << reified_name << endl;
 					}
+					else if (t.is_a<pointer_type_die>())
+					{
+						opt<string> opt_reified_name = reified_type_name(t);
+						assert(opt_reified_name);
+						auto pointee_type = t.as_a<pointer_type_die>()->find_type();
+						// cout << "type " << *opt_reified_name << endl;
+						cout << "let " << *opt_reified_name 
+							//<< " : " << reified_type_typ(pointee_type) << " ptr typ"
+							<< " = " << reified_type_expr(t) << endl;
+					}
+
+					// we inserted the with_data_memberses when we forward-declared them
+					if (!t.is_a<with_data_members_die>())
+					{
+						emitted.insert(t);
+					}
+					finished_emitting.insert(t);
 				}
 				else
 				{
@@ -519,9 +551,27 @@ int main(int argc, char **argv)
 	}
 	
 	/* Now process subprograms. */
-	for (auto i_subp = subprograms.begin(); i_subp != subprograms.end(); ++i_subp)
+	for (auto i_i_subp = subprograms.begin(); i_i_subp != subprograms.end(); ++i_i_subp)
 	{
-		
+		auto i_subp = i_i_subp->second;
+		assert(*i_subp.name_here() == i_i_subp->first);
+		cout << "let " << *i_subp.name_here() << " = foreign \"" 
+			<< *i_subp.name_here() << "\" (";
+		auto fps = i_subp.children().subseq_of<formal_parameter_die>();
+		unsigned argnum = 0;
+		if (fps.first == fps.second)
+		{
+			cout << "void";
+		}
+		else for (auto i_fp = std::move(fps.first); i_fp != fps.second; ++i_fp, ++argnum)
+		{
+			if (argnum != 0) cout << " @-> ";
+			auto t = i_fp->find_type();
+			cout << reified_type_name(t);
+			// cout << equiv_for_type(t);
+		}
+		cout << " @-> returning " << reified_type_name(i_subp->get_type())
+			<< ")" << endl;
 	}
 	
 	// success! 
