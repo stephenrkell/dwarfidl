@@ -8,7 +8,7 @@
 
 #include <boost/algorithm/string.hpp>
 
-#include <indenting_ostream.hpp>
+#include <srk31/indenting_ostream.hpp>
 #include <dwarfpp/encap.hpp>
 #include "cxx_model.hpp"
 #include "cxx_dependency_order.hpp"
