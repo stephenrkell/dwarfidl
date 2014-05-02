@@ -5,7 +5,7 @@ ncurses_auto.ml: ../../src/dwarf-ocaml-ctypesgen
 ../../src/dwarf-ocaml-ctypesgen:
 
 ncurses_auto: ncurses_auto.ml hello.ml
-	ocamlfind ocamlopt -linkpkg -package ctypes -package ctypes.foreign -cclib -Wl,--no-as-needed -cclib -lncurses ncurses_auto.ml hello.ml
+	ocamlfind ocamlopt -o "$@" -linkpkg -package ctypes -package ctypes.foreign -cclib -Wl,--no-as-needed -cclib -lncurses ncurses_auto.ml hello.ml
 
 debug:
 	gdb ../../src/dwarf-ocaml-ctypesgen --eval-command \
