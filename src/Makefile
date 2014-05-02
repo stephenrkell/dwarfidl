@@ -11,7 +11,7 @@ LDLIBS += -lcxxgen -ldwarfpp -ldwarf -lelf
 LDLIBS += -lsrk31c++ -lc++fileno 
 LDLIBS += -lboost_filesystem -lboost_regex -lboost_system -lboost_serialization
 
-LDFLAGS += -L.
+LDFLAGS += -L. -Wl,-R`pwd`
 
 CXXFLAGS += -Iparser/include -I../include
 CXXFLAGS += -g3 -O0 -Wall -std=c++0x 
@@ -27,7 +27,7 @@ clean::
 	rm -f dwarfhpp *.o *.so
 	rm -f $(DEPS)
 
-$(DEPS) : .%.d : %.cpp parser/include/dwarfidlCParser.h parser/include/dwarfidlCLexer.h
+$(DEPS) : .%.d : %.cpp # parser/include/dwarfidlCParser.h parser/include/dwarfidlCLexer.h
 	$(CXX) -MM $(CXXFLAGS) "$<"  > "$@"
 
 ifneq ($(MAKECMDGOALS),clean)
