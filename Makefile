@@ -10,5 +10,5 @@ lib: src
 .PHONY: clean
 clean:
 	$(MAKE) -C src clean
-	#rm -f lib/*.{o,so,a} 
+	rm -f lib/*.{o,so,a}  || true
 	#$(MAKE) -C test clean
