@@ -20,7 +20,7 @@ CXXFLAGS += -g3 -O0 -Wall -std=c++0x
 CXXFLAGS += -Wno-deprecated-declarations
 
 .PHONY: default
-default: libdwarfidl.a dwarfhpp dwarf-ocaml-ctypesgen #parser/test_parser
+default: libdwarfidl.a dwarfhpp dwarf-ocaml-ctypesgen printer/dwarfidldump #parser/test_parser
 
 .PHONY: clean
 clean:: 
@@ -46,6 +46,11 @@ dwarfhpp: dwarfhpp.o libdwarfidl.a
 
 dwarf-ocaml-ctypesgen: dwarf-ocaml-ctypesgen.o libdwarfidl.a
 	$(CXX) -o "$@" "$<" $(LDFLAGS) -L. -ldwarfidl $(LDLIBS) 
+
+printer/dwarfidldump.o: CFLAGS += -Iprinter
+
+printer/dwarfidldump: printer/dwarfidldump.o printer/print.o
+	$(CXX) -o "$@" $+ $(LDFLAGS) -L. -ldwarfidl $(LDLIBS) 
 
 libdwarfidl.a: cxx_model.o cxx_dependency_order.o
 	$(AR) r "$@" $^
