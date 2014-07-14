@@ -1,9 +1,14 @@
+THIS_MAKEFILE := $(lastword $(MAKEFILE_LIST))
 OCAMLOPT ?= ocamlfind ocamlopt
 OCAMLOPTFLAGS += -linkpkg -package ctypes -package ctypes.foreign
-LDLIBS += -Wl,--no-as-needed -lncurses
-CFLAGS += -g3 -gstrict-dwarf -std=c99 -fno-eliminate-unused-debug-types -O2
 
-THIS_MAKEFILE := $(lastword $(MAKEFILE_LIST))
+CFLAGS += -g3 -gstrict-dwarf -std=c99 -fno-eliminate-unused-debug-types -O2
+CXXFLAGS += -I$(realpath $(dir $(THIS_MAKEFILE)))/../include
+
+LDFLAGS += -L$(realpath $(dir $(THIS_MAKEFILE)))/../lib
+
+ncurses_auto/ncurses_auto: LDLIBS += -Wl,--no-as-needed -lncurses
+lang-make-dies/lang-make-dies lang-make-dies: LDLIBS += -ldwarfidl -lcxxgen -lantlr3c -ldwarfpp -lc++fileno -lsrk31c++ -ldwarf -lelf
 
 cases := $(wildcard [-a-z_]*)
 
@@ -44,24 +49,24 @@ _onlygdbrun-%:
 	gdb --args ./$* ./$*
 
 build-%:
-	$(MAKE) -C "$*" $(INCLUDE_MK_INC) -f ../Makefile "$*" 
+	$(MAKE) -C "$*" $(INCLUDE_MK_INC) -f ../makefile "$*" 
 
 run-%:
-	$(MAKE) build-$* && ( $(MAKE) -C "$*" $(INCLUDE_MK_INC) -f ../Makefile _onlyrun-$* )
+	$(MAKE) build-$* && ( $(MAKE) -C "$*" $(INCLUDE_MK_INC) -f ../makefile _onlyrun-$* )
 
 cleanbuild-%:
-	$(MAKE) -C $* $(INCLUDE_MK_INC) -f ../Makefile clean && \
+	$(MAKE) -C $* $(INCLUDE_MK_INC) -f ../makefile clean && \
 	$(MAKE) build-$* 
 
 cleanrun-%: 
-	$(MAKE) -C $* $(INCLUDE_MK_INC) -f ../Makefile clean && \
+	$(MAKE) -C $* $(INCLUDE_MK_INC) -f ../makefile clean && \
 	$(MAKE) run-$*
 
 gdbrun-%: # run the test case with itself as input
-	$(MAKE) -C "$*" $(INCLUDE_MK_INC) "$*" && ( cd "$*" && $(MAKE) $(INCLUDE_MK_INC) -f ../Makefile _onlygdbrun-$* )
+	$(MAKE) -C "$*" $(INCLUDE_MK_INC) "$*" && ( cd "$*" && $(MAKE) $(INCLUDE_MK_INC) -f ../makefile _onlygdbrun-$* )
 
 gdbcleanrun-%:
-	$(MAKE) -C $* $(INCLUDE_MK_INC) -f ../Makefile clean && $(MAKE) gdbrun-$*
+	$(MAKE) -C $* $(INCLUDE_MK_INC) -f ../makefile clean && $(MAKE) gdbrun-$*
 
 clean-%:
 	$(MAKE) -C "$*" $(INCLUDE_MK_INC) -f $(realpath $(THIS_MAKEFILE)) clean
@@ -71,7 +76,7 @@ default:
             $(MAKE) run-$$case; \
         done
 
-# generic clean rule that we can run from test dirs too (with $(MAKE) -f ../Makefile)
+# generic clean rule that we can run from test dirs too (with $(MAKE) -f ../makefile)
 clean: # (delete anything whose name is a prefix of a .c file's and doesn't contain a dot)
-	rm -f $(filter-out .,$(patsubst %.c,%,$(shell find -name '*.c')))
+	rm -f $(filter-out .,$(patsubst %.c,%,$(shell find -name '*.c'))) $(filter-out .,$(patsubst %.cpp,%,$(shell find -name '*.cpp')))
 	find -name '*.cmx'  -o -name '*.cmi' -o -name '*.o' -o -name '*.s' -o -name '*.i' | xargs rm -f

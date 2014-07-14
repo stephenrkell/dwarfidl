@@ -6,7 +6,7 @@
  * Copyright (c) 2009--2012, Stephen Kell.
  */
 
-#include "cxx_model.hpp"
+#include "dwarfidl/cxx_model.hpp"
 #include <boost/algorithm/string.hpp>
 #include <boost/regex.hpp>
 

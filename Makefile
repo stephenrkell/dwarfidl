@@ -1,11 +1,19 @@
-default: src lib #test
+default: src printer lib #test
+
+.PHONY: parser
+parser:
+	$(MAKE) -C parser
 
 .PHONY: src
-src:
+src: parser
 	$(MAKE) -C src
 
+.PHONY: printer
+printer: src
+	$(MAKE) -C printer
+
 lib: src
-	mkdir -p lib && cd lib && ln -sf ../src/libdwarfidl.a .
+	mkdir -p lib && cd lib && ln -sf ../src/libdwarfidl.a ../src/libdwarfidl.so .
 
 .PHONY: clean
 clean:
