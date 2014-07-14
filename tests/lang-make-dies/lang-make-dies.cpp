@@ -14,7 +14,7 @@ int main(int argc, char **argv)
 	
 	cout << "Opening " << argv[0] << "..." << endl;
 	std::ifstream in(argv[0]);
-	core::root_die r(fileno(in));
+	core::in_memory_root_die r(fileno(in));
 	
 	/* Also open a dwarfidl file, read some DIE definitions from it. */
 	auto str = antlr3FileStreamNew(
@@ -30,9 +30,11 @@ int main(int argc, char **argv)
 	
 	auto created_cu = r.make_new(r.begin(), DW_TAG_compile_unit);
 	assert(created_cu);
-	dwarfidl::create_dies(r.find(created_cu->get_offset()), tree);
+	cout << "Created CU: " << created_cu << endl;
 	
-	cout << r;
+	dwarfidl::create_dies(created_cu, tree);
+	
+	cout << "Created some more stuff; whole tree is now: " << endl << r;
 	
 	return 0;
 }

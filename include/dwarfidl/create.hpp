@@ -15,6 +15,7 @@ namespace dwarfidl
 	
 	void create_dies(const iterator_base& parent, antlr::tree::Tree *ast);
 	void create_one_die(const iterator_base& parent, antlr::tree::Tree *ast);
+	void find_or_create_die(const iterator_base& parent, antlr::tree::Tree *ast);
 }
 
 

@@ -17,4 +17,5 @@ DIE;
 ATTR;
 ATTRS;
 CHILDREN;
+DIES;
 ')

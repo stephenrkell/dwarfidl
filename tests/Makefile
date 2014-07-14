@@ -5,7 +5,7 @@ OCAMLOPTFLAGS += -linkpkg -package ctypes -package ctypes.foreign
 CFLAGS += -g3 -gstrict-dwarf -std=c99 -fno-eliminate-unused-debug-types -O2
 CXXFLAGS += -I$(realpath $(dir $(THIS_MAKEFILE)))/../include
 
-LDFLAGS += -L$(realpath $(dir $(THIS_MAKEFILE)))/../lib
+LDFLAGS += -L$(realpath $(dir $(THIS_MAKEFILE)))/../lib -Wl,-rpath,$(realpath $(dir $(THIS_MAKEFILE)))/../lib
 
 ncurses_auto/ncurses_auto: LDLIBS += -Wl,--no-as-needed -lncurses
 lang-make-dies/lang-make-dies lang-make-dies: LDLIBS += -ldwarfidl -lcxxgen -lantlr3c -ldwarfpp -lc++fileno -lsrk31c++ -ldwarf -lelf
@@ -63,7 +63,7 @@ cleanrun-%:
 	$(MAKE) run-$*
 
 gdbrun-%: # run the test case with itself as input
-	$(MAKE) -C "$*" $(INCLUDE_MK_INC) "$*" && ( cd "$*" && $(MAKE) $(INCLUDE_MK_INC) -f ../makefile _onlygdbrun-$* )
+	$(MAKE) -C "$*" $(INCLUDE_MK_INC) -f ../makefile "$*" && ( cd "$*" && $(MAKE) $(INCLUDE_MK_INC) -f ../makefile _onlygdbrun-$* )
 
 gdbcleanrun-%:
 	$(MAKE) -C $* $(INCLUDE_MK_INC) -f ../makefile clean && $(MAKE) gdbrun-$*

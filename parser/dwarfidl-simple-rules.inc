@@ -8,7 +8,8 @@
 
  */
 
-toplevel : dieDecl
+toplevel : dieDecl*
+        -> ^( DIES dieDecl* )
         ;
 
 dieDecl     :  diePhrase SEMICOLON
@@ -36,6 +37,7 @@ typeClause : ':' dieRef
 
 dieRef : IDENT
         | '(' diePhrase ')'
+            -> diePhrase
         ;
 
 attrsClause : '[' attrPhraseList? ']'
