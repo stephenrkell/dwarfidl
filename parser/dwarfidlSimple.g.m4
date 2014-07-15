@@ -3,6 +3,8 @@ include(head.g.m4)
 include(dwarfidl-tokens.inc)
 tokens {
 dwarfidl_tokens
+NAME = 'name';
+TYPE = 'type';
 }
 
 antlr_m4_begin_rules

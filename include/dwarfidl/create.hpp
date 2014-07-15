@@ -14,8 +14,17 @@ namespace dwarfidl
 	using namespace dwarf::core;
 	
 	void create_dies(const iterator_base& parent, antlr::tree::Tree *ast);
-	void create_one_die(const iterator_base& parent, antlr::tree::Tree *ast);
-	void find_or_create_die(const iterator_base& parent, antlr::tree::Tree *ast);
+	iterator_base create_one_die(const iterator_base& parent, antlr::tree::Tree *ast, 
+		const std::map<antlr::tree::Tree *, iterator_base>& nested
+		 = std::map<antlr::tree::Tree *, iterator_base>()
+	);
+	iterator_base create_one_die_with_children(const iterator_base& parent, antlr::tree::Tree *ast);
+	iterator_base find_or_create_die(const iterator_base& parent, antlr::tree::Tree *ast);
+
+	encap::attribute_value make_attribute_value(antlr::tree::Tree *d, 
+		const iterator_base& context, 
+		Dwarf_Half attr,
+		const std::map<antlr::tree::Tree *, iterator_base>& nested);
 }
 
 
