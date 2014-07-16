@@ -5,7 +5,7 @@ using namespace dwarf;
 using namespace dwarf::core;
 using encap::attribute_value;
 
-using std::cout;
+using std::cerr;
 
 namespace dwarfidl
 {
@@ -110,7 +110,7 @@ namespace dwarfidl
 	
 	iterator_base create_one_die_with_children(const iterator_base& parent, antlr::tree::Tree *d)
 	{
-		cout << "Creating a DIE from " << CCP(TO_STRING_TREE(d)) << endl;
+		cerr << "Creating a DIE from " << CCP(TO_STRING_TREE(d)) << endl;
 
 		INIT;
 		BIND2(d, tag_keyword);
@@ -158,21 +158,47 @@ namespace dwarfidl
 		return create_one_die(parent, ast);
 	}
 	
-	void create_dies(const iterator_base& parent, antlr::tree::Tree *ast)
+	iterator_base create_dies(const iterator_base& parent, antlr::tree::Tree *ast)
 	{
 		/* Walk the tree. Create any DIE we see. We also have to
 		 * scan attrs and create any that are inlined and do not
 		 * already exist. */
-		cout << "Got AST: " << CCP(TO_STRING_TREE(ast)) << endl;
+		cerr << "Got AST: " << CCP(TO_STRING_TREE(ast)) << endl;
+		iterator_base first_created;
 		FOR_ALL_CHILDREN(ast)
 		{
-			cout << "Got a node: " << CCP(TO_STRING_TREE(n)) << endl;
+			cerr << "Got a node: " << CCP(TO_STRING_TREE(n)) << endl;
 			SELECT_ONLY(DIE);
 			antlr::tree::Tree *die = n;
 			
-			create_one_die_with_children(parent, n);
+			auto created = create_one_die_with_children(parent, n);
+			if (!first_created) first_created = created;
 			
 			cerr << "Created one DIE and its children; we now have: " << endl << parent.root();
 		}
+		return first_created;
+	}
+	iterator_base create_dies(const iterator_base& parent, const string& some_dwarfidl)
+	{
+		
+		/* Also open a dwarfidl file, read some DIE definitions from it. */
+		auto str = antlr3StringStreamNew(
+			const_cast<unsigned char *>(reinterpret_cast<const unsigned char *>(some_dwarfidl.c_str())), 
+			ANTLR3_ENC_8BIT,
+			strlen(some_dwarfidl.c_str()),
+			const_cast<unsigned char *>(reinterpret_cast<const unsigned char *>("blah"))
+		);
+		assert(str);
+		auto lexer = dwarfidlSimpleCLexerNew(str);
+		auto tokenStream = antlr3CommonTokenStreamSourceNew(ANTLR3_SIZE_HINT, TOKENSOURCE(lexer));
+		auto parser = dwarfidlSimpleCParserNew(tokenStream);
+		dwarfidlSimpleCParser_toplevel_return ret = parser->toplevel(parser);
+		antlr::tree::Tree *tree = ret.tree;
+
+		iterator_base first_created = create_dies(parent, tree);
+
+		cerr << "Created some more stuff; whole tree is now: " << endl << parent.get_root();
+		
+		return first_created;
 	}
 }

@@ -13,7 +13,8 @@ namespace dwarfidl
 	using namespace dwarf;
 	using namespace dwarf::core;
 	
-	void create_dies(const iterator_base& parent, antlr::tree::Tree *ast);
+	iterator_base create_dies(const iterator_base& parent, antlr::tree::Tree *ast);
+	iterator_base create_dies(const iterator_base& parent, const string& some_dwarfidl);
 	iterator_base create_one_die(const iterator_base& parent, antlr::tree::Tree *ast, 
 		const std::map<antlr::tree::Tree *, iterator_base>& nested
 		 = std::map<antlr::tree::Tree *, iterator_base>()

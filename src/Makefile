@@ -49,6 +49,6 @@ dwarf-ocaml-ctypesgen: dwarf-ocaml-ctypesgen.o libdwarfidl.a
 libdwarfidl.a: $(LIB_OBJS)
 	$(AR) r "$@" $^
 
-libdwarfidl.so: LDLIBS := -ldwarfpp -lsrk31c++ -lcxxgen -lboost_serialization
+libdwarfidl.so: LDLIBS := -lantlr3c -ldwarfpp -lsrk31c++ -lcxxgen -lboost_serialization
 libdwarfidl.so: $(LIB_OBJS)
 	$(CXX) -shared -o "$@" $(CXXFLAGS) $+ ../parser/dwarfidlSimpleCParser.o ../parser/dwarfidlSimpleCLexer.o $(LDFLAGS) $(LDLIBS)
