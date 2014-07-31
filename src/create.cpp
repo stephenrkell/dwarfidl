@@ -6,6 +6,7 @@ using namespace dwarf::core;
 using encap::attribute_value;
 
 using std::cerr;
+using boost::to_lower_copy;
 
 namespace dwarfidl
 {
@@ -97,7 +98,7 @@ namespace dwarfidl
 			 * and then to_lower() on the string.
 			 */
 			
-			Dwarf_Half attrnum = created.spec_here().attr_for_name(("DW_AT_" + boost::to_lower_copy(attrstr)).c_str());
+			Dwarf_Half attrnum = created.spec_here().attr_for_name(("DW_AT_" + to_lower_copy(attrstr)).c_str());
 			encap::attribute_value v = make_attribute_value(value, created, attrnum, nested);
 			
 			dynamic_cast<core::in_memory_abstract_die&>(created.dereference())
@@ -133,8 +134,22 @@ namespace dwarfidl
 						iterator_base sub_die = find_or_create_die(parent, value);
 						nested[value] = sub_die;
 					} break;
-					// deal with the other cases later
-					// case TOKEN(IDENT):
+					case TOKEN(IDENT): {
+						/* If we're an ident, then either we're giving a new name to a thing, 
+						 * or we're referencing an existing thingby name . We only care about 
+						 * the latter case. */
+						if (to_lower_copy(string(CCP(GET_TEXT(attr)))) == "name") break;
+					
+						vector<string> name(1, string(CCP(GET_TEXT(value))));
+						iterator_base found = parent.root().scoped_resolve(parent, 
+							name.begin(), name.end());
+						if (!found) goto name_lookup_error;
+						nested[value] = found;
+						break;
+					}
+					name_lookup_error: 
+						cerr << "Could not resolve name " << CCP(TO_STRING_TREE(value)) << endl;
+						break;
 					default:
 						cerr << "Subtree " << CCP(TO_STRING_TREE(value)) 
 							<< " is not a nested DIE" << endl;
@@ -155,7 +170,10 @@ namespace dwarfidl
 
 	iterator_base find_or_create_die(const iterator_base& parent, antlr::tree::Tree *ast)
 	{
-		return create_one_die(parent, ast);
+		/* Sometimes we can search for an existing DIE. But currently we blindly
+		 * re-create DIEs that might already be existing. */
+		// auto found = parent.root().scoped_resolve(
+		return create_one_die_with_children(parent, ast);
 	}
 	
 	iterator_base create_dies(const iterator_base& parent, antlr::tree::Tree *ast)
@@ -174,7 +192,7 @@ namespace dwarfidl
 			auto created = create_one_die_with_children(parent, n);
 			if (!first_created) first_created = created;
 			
-			cerr << "Created one DIE and its children; we now have: " << endl << parent.root();
+			if (getenv("DEBUG_CC")) cerr << "Created one DIE and its children; we now have: " << endl << parent.root();
 		}
 		return first_created;
 	}
@@ -197,7 +215,7 @@ namespace dwarfidl
 
 		iterator_base first_created = create_dies(parent, tree);
 
-		cerr << "Created some more stuff; whole tree is now: " << endl << parent.get_root();
+		if (getenv("DEBUG_CC")) cerr << "Created some more stuff; whole tree is now: " << endl << parent.get_root();
 		
 		return first_created;
 	}
