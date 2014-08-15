@@ -3,7 +3,7 @@ THIS_MAKEFILE := $(realpath $(lastword $(MAKEFILE_LIST)))
 SRC := $(wildcard *.cpp)
 DEPS = $(patsubst %.cpp,.%.d,$(SRC))
 
-LIB_OBJS := cxx_model.o cxx_dependency_order.o create.o 
+LIB_OBJS := cxx_model.o dwarfidl_cxx_target.o dwarf_interface_walk.o create.o 
 
 LDLIBS := -lantlr3c
 LDLIBS += -lcxxgen -ldwarfpp
@@ -24,9 +24,8 @@ default: libdwarfidl.a libdwarfidl.so dwarfhpp dwarf-ocaml-ctypesgen
 
 .PHONY: clean
 clean:: 
-	rm -f dwarfhpp *.o *.so *.a
+	rm -f dwarfhpp dwarf-ocaml-ctypesgen *.o *.so *.a
 	rm -f $(DEPS)
-	$(MAKE) -C parser clean
 
 $(DEPS) : .%.d : %.cpp # parser/include/dwarfidlCParser.h parser/include/dwarfidlCLexer.h
 	$(CXX) -MM $(CXXFLAGS) "$<"  > "$@"

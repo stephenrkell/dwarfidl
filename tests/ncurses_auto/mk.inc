@@ -1,6 +1,6 @@
 ncurses_auto.ml: ../../src/dwarf-ocaml-ctypesgen
 	/bin/echo -e 'initscr\nnewwin\nendwin\nrefresh\nwrefresh\naddstr\nmvwaddch\nmvwaddstr\nbox\ncbreak' | tee /dev/stderr | \
-../../src/dwarf-ocaml-ctypesgen /usr/lib/debug/lib/x86_64-linux-gnu/libncurses.so.5.* > "$@"
+../../src/dwarf-ocaml-ctypesgen /usr/lib/debug/lib/x86_64-linux-gnu/libncurses.so.5.* > "$@" || rm -f "$@"
 
 ../../src/dwarf-ocaml-ctypesgen:
 

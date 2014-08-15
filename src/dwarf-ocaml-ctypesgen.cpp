@@ -1,4 +1,4 @@
-/* This is a simple dwarfpp program which generates a C file
+/* This is a simple dwarfpp program which generates an OCaml file
  * recording data on a uniqued set of data types  allocated in a given executable.
  */
  
@@ -19,6 +19,7 @@
 #include <cxxgen/tokens.hpp>
 #include <dwarfpp/lib.hpp>
 #include <fileno.hpp>
+#include "dwarfidl/dwarf_interface_walk.hpp"
 
 using std::cin;
 using std::cout;
@@ -38,6 +39,7 @@ using namespace dwarf;
 using dwarf::core::iterator_base;
 using dwarf::core::iterator_df;
 using dwarf::core::iterator_sibs;
+using dwarf::core::type_set;
 using dwarf::core::type_die;
 using dwarf::core::subprogram_die;
 using dwarf::core::formal_parameter_die;
@@ -56,6 +58,8 @@ using dwarf::core::type_chain_die;
 using dwarf::core::base_type_die;
 using dwarf::core::qualified_type_die;
 using dwarf::spec::opt;
+
+using dwarf::tool::gather_interface_dies;
 
 using dwarf::lib::Dwarf_Off;
 
@@ -182,8 +186,6 @@ int main(int argc, char **argv)
 
 	map<string, iterator_df<subprogram_die> > subprograms;
 	
-	dwarf::core::type_set types;
-	
 	std::istream& in = /* p_in ? *p_in :*/ cin;
 	
 	/* populate the subprogram and types lists. */
@@ -194,62 +196,23 @@ int main(int argc, char **argv)
 		/* Find a toplevel grandchild that is a subprogram of this name. */
 		subprogram_names.insert(buf);
 	}
-	auto toplevel_seq = root.grandchildren();
-	for (auto i_d = std::move(toplevel_seq.first); i_d != toplevel_seq.second; ++i_d)
-	{
-		auto i_subp = i_d.base().base().as_a<subprogram_die>();
-		if (!i_subp) continue; // HACK until we can do subseq_of on grandchildren
-		if (i_subp.name_here() 
+	
+	set<iterator_base> dies;
+	type_set types;
+	gather_interface_dies(root, dies, types, [subprogram_names](const iterator_base& i){
+		/* This is the basic test for whether an interface element is of 
+		 * interest. For us, it's just whether it's a visible subprogram in our list. */
+		auto i_subp = i.as_a<subprogram_die>();
+		return i_subp && i_subp.name_here() 
 			&& (!i_subp->get_visibility() || *i_subp->get_visibility() == DW_VIS_exported)
-			&& subprogram_names.find(*i_subp.name_here()) != subprogram_names.end())
-		{
-			// looks like a goer
-			subprograms.insert(
-				make_pair(
-					*i_subp.name_here(), 
-					i_subp
-				)
-			);
-			
-			auto add_all = [&types, &root](iterator_df<type_die> outer_t) {
-				walk_type(outer_t, iterator_base::END, 
-					[&types, &root](iterator_df<type_die> t, iterator_df<program_element_die> reason) -> bool {
-						if (!t) return false; // void case
-						auto memb = reason.as_a<member_die>();
-						if (memb && memb->get_declaration() && *memb->get_declaration()
-							&& memb->get_external() && *memb->get_external())
-						{
-							// static member vars don't get added nor recursed on
-							return false;
-						}
-						// apart from that, insert all nonvoids....
-						auto inserted = types.insert(t);
-						if (!inserted.second)
-						{
-							// cerr << "Type was already present: " << *t 
-							// 	<< " (or something equal to it: " << *inserted.first
-							// 	<< ")" << endl;
-							// cerr << "Attributes: " << t->copy_attrs(root) << endl;
-							return false; // was already present
-						}
-						else
-						{
-							cerr << "Inserted new type: " << *t << endl;
-							// cerr << "Attributes: " << t->copy_attrs(root) << endl;
-							return true;
-						}
-					}
-				);
-			};
-			
-			// make sure we have all the relevant types in our set
-			if (i_subp->find_type()) add_all(i_subp->find_type());
-			auto fps = i_subp->children().subseq_of<formal_parameter_die>();
-			for (auto i_fp = std::move(fps.first); i_fp != fps.second; ++i_fp)
-			{
-				add_all(i_fp->find_type());
-			}
-		}
+			&& (subprogram_names.find(*i_subp.name_here()) != subprogram_names.end());
+	});
+	
+	/* Filter out just the subprograms. */
+	for (auto i_d = dies.begin(); i_d != dies.end(); ++i_d)
+	{
+		if (i_d->is_a<subprogram_die>()) subprograms.insert(
+			make_pair(*i_d->name_here(), i_d->as_a<subprogram_die>()));
 	}
 
 	cerr << "Found " << subprograms.size() << " subprograms." << endl;

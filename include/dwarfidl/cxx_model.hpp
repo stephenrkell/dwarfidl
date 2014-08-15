@@ -19,6 +19,8 @@
 #include <srk31/indenting_ostream.hpp>
 
 #include <cxxgen/cxx_compiler.hpp>
+#include <dwarfpp/spec.hpp>
+#include <dwarfpp/lib.hpp>
 
 namespace dwarf {
 namespace tool {
@@ -26,15 +28,22 @@ namespace tool {
 using namespace dwarf;
 using dwarf::lib::Dwarf_Half;
 using dwarf::lib::Dwarf_Off;
+using dwarf::core::root_die;
+using dwarf::core::iterator_base;
+using dwarf::core::iterator_df;
+using dwarf::core::basic_die;
+using dwarf::core::type_die;
+using dwarf::core::base_type_die;
+using dwarf::core::subprogram_die;
+using dwarf::core::subroutine_type_die;
+using dwarf::core::formal_parameter_die;
+
 using std::vector;
 using std::pair;
 using std::map;
 using std::string;
 using boost::optional;
-using std::shared_ptr;
-using dwarf::spec::basic_die;
 using srk31::indenting_ostream;
-using dwarf::spec::abstract_dieset;
 
 /** This class contains generally useful stuff for generating C++ code.
  *  It should be free from DWARF details. */
@@ -66,51 +75,51 @@ public:
 	cxx_generator_from_dwarf(const spec::abstract_def& s) : p_spec(&s) {}
 
 
-	bool is_builtin(shared_ptr<spec::basic_die> p_d);
+	bool is_builtin(iterator_df<> p_d);
 
 	string 
-	name_for(shared_ptr<spec::type_die> t) 
+	name_for(iterator_df<type_die> t) 
 	{ return local_name_for(t); }
 	
 	virtual 
 	optional<string>
-	name_for_base_type(shared_ptr<spec::base_type_die>) = 0;
+	name_for_base_type(iterator_df<base_type_die>) = 0;
 	
 	vector<string> 
-	name_parts_for(shared_ptr<spec::type_die> t) 
+	name_parts_for(iterator_df<type_die> t) 
 	{ return local_name_parts_for(t); }
 
 	bool 
-	type_infixes_name(shared_ptr<spec::basic_die> p_d);
+	type_infixes_name(iterator_df<basic_die> p_d);
 
 	string 
-	local_name_for(shared_ptr<spec::basic_die> p_d,
+	local_name_for(iterator_df<basic_die> p_d,
 		bool use_friendly_names = true) 
 	{ return name_from_name_parts(local_name_parts_for(p_d, use_friendly_names)); }
 
 	vector<string> 
-	local_name_parts_for(shared_ptr<spec::basic_die> p_d,
+	local_name_parts_for(iterator_df<basic_die> p_d,
 		bool use_friendly_names = true);
 		
 	string 
-	fq_name_for(shared_ptr<spec::basic_die> p_d)
+	fq_name_for(iterator_df<basic_die> p_d)
 	{ return name_from_name_parts(fq_name_parts_for(p_d)); }
 	
 	vector<string> 
-	fq_name_parts_for(shared_ptr<spec::basic_die> p_d);
+	fq_name_parts_for(iterator_df<basic_die> p_d);
 	
 	string 
-	cxx_name_from_die(shared_ptr<spec::basic_die> p_d);
+	cxx_name_from_die(iterator_df<basic_die> p_d);
 
 	bool 
-	cxx_type_can_be_qualified(shared_ptr<spec::type_die> p_d) const;
+	cxx_type_can_be_qualified(iterator_df<type_die> p_d) const;
 
 	bool 
-	cxx_type_can_have_name(shared_ptr<spec::type_die> p_d) const;
+	cxx_type_can_have_name(iterator_df<type_die> p_d) const;
 
 	pair<string, bool>
 	cxx_declarator_from_type_die(
-		shared_ptr<spec::type_die> p_d, 
+		iterator_df<type_die> p_d, 
 		optional<const string&> infix_typedef_name = optional<const string&>(),
 		bool use_friendly_names = true,
 		optional<const string&> extra_prefix = optional<const string&>(),
@@ -119,33 +128,33 @@ public:
 
 	bool 
 	cxx_assignable_from(
-		shared_ptr<spec::type_die> dest,
-		shared_ptr<spec::type_die> source
+		iterator_df<type_die> dest,
+		iterator_df<type_die> source
 	);
 
 	bool 
-	cxx_is_complete_type(shared_ptr<spec::type_die> t);
+	cxx_is_complete_type(iterator_df<type_die> t);
 	
 	pair<string, bool>
 	name_for_type(
-		shared_ptr<spec::type_die> p_d, 
+		iterator_df<type_die> p_d, 
 		optional<const string&> infix_typedef_name = optional<const string&>(),
 		bool use_friendly_names = true);
 
 	string 
 	name_for_argument(
-		shared_ptr<spec::formal_parameter_die> p_d, 
+		iterator_df<formal_parameter_die> p_d, 
 		int argnum);
 
 	string
 	make_typedef(
-		shared_ptr<spec::type_die> p_d,
+		iterator_df<type_die> p_d,
 		const string& name 
 	);
 	
 	string
 	make_function_declaration_of_type(
-		shared_ptr<spec::subroutine_type_die> p_d,
+		iterator_df<subroutine_type_die> p_d,
 		const string& name,
 		bool write_semicolon = true,
 		bool wrap_with_extern_lang = true
@@ -153,7 +162,7 @@ public:
 
 	string 
 	create_ident_for_anonymous_die(
-		shared_ptr<spec::basic_die> p_d
+		iterator_df<basic_die> p_d
 	);
 
 	string 
@@ -163,104 +172,75 @@ public:
 	void 
 	emit_model(
 		indenting_ostream& out,
-		abstract_dieset::iterator i_d
+		const iterator_base& i_d
 	);
 	
-	template<typename Pred = srk31::True<shared_ptr<spec::basic_die> > > 
+	template<typename Pred = srk31::True<iterator_df<basic_die> > > 
 	void 
 	dispatch_to_model_emitter(
 		indenting_ostream& out, 
-		abstract_dieset::iterator i_d, 
+		const iterator_base& i_d, 
 		const Pred& pred = Pred()
 	);
 
 protected:
 	virtual 
-	shared_ptr<spec::type_die>
+	iterator_df<type_die>
 	transform_type(
-		shared_ptr<spec::type_die> t,
-		abstract_dieset::iterator context
+		iterator_df<type_die> t,
+		const iterator_base& context
 	)
 	{
 		return t;
 	}
 
-	template <typename Pred = srk31::True< shared_ptr<spec::basic_die> > >
+	template <typename Pred = srk31::True< iterator_df<basic_die> > >
 	void 
 	recursively_emit_children(
 		indenting_ostream& out,
-		abstract_dieset::iterator i_d,
+		const iterator_base& i_d,
 		const Pred& pred = Pred()
 	);
-// 	template <typename Ret, typename Func, typename Args...>
-// 	Ret dispatch(const Func&, shared_ptr<spec::basic_die> p_d, Args...)
-// 	{
-// 		switch(p_d->get_tag())
-// 		{
-// 			case DW_TAG_base_type: 
-// 			case DW_TAG_subprogram:
-// 			case DW_TAG_formal_parameter:
-// 			case DW_TAG_unspecified_parameters:
-// 			case DW_TAG_array_type:
-// 			case DW_TAG_enumeration_type:
-// 			case DW_TAG_member:
-// 			case DW_TAG_pointer_type:
-// 			case DW_TAG_structure_type:
-// 			case DW_TAG_subroutine_type:
-// 			case DW_TAG_typedef:
-// 			case DW_TAG_union_type:
-// 			case DW_TAG_const_type:
-// 			case DW_TAG_constant:
-// 			case DW_TAG_enumerator:
-// 			case DW_TAG_variable:
-// 			case DW_TAG_volatile_type:
-// 			case DW_TAG_restrict_type:
-// 			case DW_TAG_subrange_type:
-// 
-// 		}
-// 	}
 };
 
 /* specializations of the above */
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_base_type>             (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subprogram>            (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_formal_parameter>      (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_unspecified_parameters>(indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_array_type>            (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_enumeration_type>      (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_member>                (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_pointer_type>          (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_reference_type>        (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_structure_type>        (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subroutine_type>       (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_typedef>               (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_union_type>            (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_const_type>            (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_constant>              (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_enumerator>            (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_variable>              (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_volatile_type>         (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_restrict_type>         (indenting_ostream& out, abstract_dieset::iterator i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subrange_type>         (indenting_ostream& out, abstract_dieset::iterator i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_base_type>             (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subprogram>            (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_formal_parameter>      (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_unspecified_parameters>(indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_array_type>            (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_enumeration_type>      (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_member>                (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_pointer_type>          (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_reference_type>        (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_structure_type>        (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subroutine_type>       (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_typedef>               (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_union_type>            (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_const_type>            (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_constant>              (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_enumerator>            (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_variable>              (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_volatile_type>         (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_restrict_type>         (indenting_ostream& out, const iterator_base& i_d);
+template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subrange_type>         (indenting_ostream& out, const iterator_base& i_d);
 
 	/* The dispatch function (template) defined. */
-	template <typename Pred /* = srk31::True<shared_ptr<spec::basic_die> > */ > 
+	template <typename Pred /* = srk31::True<iterator_df<basic_die> > */ > 
 	void cxx_generator_from_dwarf::dispatch_to_model_emitter(
 		indenting_ostream& out,
-		abstract_dieset::iterator i_d,
+		const iterator_base& i_d,
 		const Pred& pred /* = Pred() */)
 	{
-		auto p_d = dynamic_pointer_cast<basic_die>(*i_d);
-
 		// if it's a compiler builtin, skip it
-		if (is_builtin(p_d->get_this())) return;
+		if (is_builtin(i_d)) return;
 		// if it's not visible, skip it
 		// if (!is_visible(p_d->get_this())) return;
 		// if our predicate says no, skip it
-		if (!pred(p_d->get_this())) return;
+		if (!pred(i_d)) return;
 	
 		// otherwise dispatch
-		switch(p_d->get_tag())
+		switch(i_d.tag_here())
 		{
 			case 0:
 				assert(false);
@@ -295,7 +275,7 @@ template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subrange_type>      
 				break;
 			default:
 				cerr 	<< "Warning: ignoring tag " 
-							<< p_d->get_ds().get_spec().tag_lookup(p_d->get_tag())
+							<< i_d.spec_here().tag_lookup(i_d.tag_here())
 							<< endl;
 				break;
 		}
@@ -317,7 +297,7 @@ public:
 	cxx_target() {}
 	
 	// implementation of pure virtual function in cxx_generator_from_dwarf
-	optional<string> name_for_base_type(shared_ptr<spec::base_type_die> p_d);
+	optional<string> name_for_base_type(iterator_df<base_type_die> p_d);
 };
 
 } // end namespace tool

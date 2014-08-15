@@ -21,12 +21,11 @@ using std::ostringstream;
 using std::deque;
 using boost::optional;
 using boost::regex;
-using std::shared_ptr;
-using std::dynamic_pointer_cast;
-using namespace dwarf::spec;
+using namespace dwarf;
 using dwarf::lib::Dwarf_Half;
 using dwarf::lib::Dwarf_Off;
 using dwarf::lib::Dwarf_Unsigned;
+using namespace dwarf::core;
 
 namespace dwarf {
 namespace tool {
@@ -87,27 +86,26 @@ namespace tool {
 	}
 	
 	bool 
-	cxx_generator_from_dwarf::type_infixes_name(shared_ptr<spec::basic_die> p_d)
+	cxx_generator_from_dwarf::type_infixes_name(iterator_df<basic_die> p_d)
 	{
-		auto t = dynamic_pointer_cast<spec::type_die>(p_d);
+		auto t = p_d.as_a<type_die>();
 		//cerr << "Does this type infix a name? " << *t << endl;
 		assert(t);
 		auto unq_t = t->get_unqualified_type();
 		return 
 			unq_t && (
-			unq_t->get_tag() == DW_TAG_subroutine_type
-			||  unq_t->get_tag() == DW_TAG_array_type
+			unq_t.tag_here() == DW_TAG_subroutine_type
+			||  unq_t.tag_here() == DW_TAG_array_type
 			|| 
-			(unq_t->get_tag() == DW_TAG_pointer_type &&
-				dynamic_pointer_cast<spec::pointer_type_die>(unq_t)->get_type()
+			(unq_t.tag_here() == DW_TAG_pointer_type &&
+				unq_t.as_a<pointer_type_die>()->get_type()
 				&& 
-				dynamic_pointer_cast<spec::pointer_type_die>(unq_t)->get_type()
-					->get_tag()	== DW_TAG_subroutine_type)
+				unq_t.as_a<pointer_type_die>()->get_type().tag_here() == DW_TAG_subroutine_type)
 				);
 	}
 
 	string 
-	cxx_generator_from_dwarf::cxx_name_from_die(shared_ptr<spec::basic_die> p_d)
+	cxx_generator_from_dwarf::cxx_name_from_die(iterator_df<basic_die> p_d)
 	{
 		/* In C code, we can get a problem with tagged namespaces (struct, union, enum) 
 		 * overlapping with member names (and with each other). This causes an error like
@@ -121,24 +119,24 @@ namespace tool {
 		// to make sure we don't get ourselves as "conflicting",
 		// we should check that we're a member_die or other non-CU-level thing
 		auto conflicting_toplevel_die = 
-			(p_d->get_name() && p_d->get_parent()->get_tag() != DW_TAG_compile_unit) 
-				? p_d->get_ds().toplevel()->visible_named_grandchild(*p_d->get_name())
-				: shared_ptr<spec::basic_die>();
-		assert(!conflicting_toplevel_die
-		|| conflicting_toplevel_die->iterator_here() != p_d->iterator_here());
+			(p_d.name_here() && p_d.parent().tag_here() != DW_TAG_compile_unit) 
+				? p_d.root().find_visible_named_grandchild(*p_d.name_here())
+				: iterator_base::END;
+		// if we get a conflict, we shouldn't be conflicting with ourselves
+		assert(!conflicting_toplevel_die || conflicting_toplevel_die != p_d);
 		string name_to_use;
-		if (p_d->get_name() && !conflicting_toplevel_die)
+		if (p_d.name_here() && !conflicting_toplevel_die)
 		{
-			name_to_use = cxx_name_from_string(*p_d->get_name(), "_dwarfhpp_");
+			name_to_use = cxx_name_from_string(*p_d.name_here(), "_dwarfhpp_");
 			return name_to_use;
 		}
-		else if (p_d->get_name())
+		else if (p_d.name_here())
 		{
 			assert(conflicting_toplevel_die);
 			// this is the conflicting case
-			cerr << "Warning: renaming element " << *p_d->get_name()
-				<< " child of " << p_d->get_parent()->summary()
-				<< " because it conflicts with toplevel " << conflicting_toplevel_die->summary()
+			cerr << "Warning: renaming element " << *p_d.name_here()
+				<< " child of " << p_d.parent().summary()
+				<< " because it conflicts with toplevel " << conflicting_toplevel_die.summary()
 				<< endl;
 			name_to_use = create_ident_for_anonymous_die(p_d);
 			return name_to_use;
@@ -146,37 +144,37 @@ namespace tool {
 		else // anonymous case
 		{
 			ostringstream s;
-			s << "_dwarfhpp_anon_" << hex << p_d->get_offset();
+			s << "_dwarfhpp_anon_" << hex << p_d.offset_here();
 			return s.str();
 		}
 	}
 	
-	bool cxx_generator_from_dwarf::cxx_type_can_be_qualified(shared_ptr<spec::type_die> p_d) const
+	bool cxx_generator_from_dwarf::cxx_type_can_be_qualified(iterator_df<type_die> p_d) const
 	{
-		if (p_d->get_tag() == DW_TAG_array_type) return false;
-		if (p_d->get_tag() == DW_TAG_subroutine_type) return false;
+		if (p_d.tag_here() == DW_TAG_array_type) return false;
+		if (p_d.tag_here() == DW_TAG_subroutine_type) return false;
 		// FIXME: any more?
 		// now we know this bit of the type is fine for qualifying 
 		// what about chained bits?
-		if (!dynamic_pointer_cast<type_chain_die>(p_d)) return true;
+		if (!p_d.is_a<type_chain_die>()) return true;
 		// if we're chaining void, also true
-		if (!dynamic_pointer_cast<type_chain_die>(p_d)->get_type()) return true;
+		if (!p_d.as_a<type_chain_die>()->get_type()) return true;
 		return cxx_type_can_be_qualified(
-			dynamic_pointer_cast<type_chain_die>(p_d)->get_type()
+			p_d.as_a<type_chain_die>()->get_type()
 		);
 	}
 
-	bool cxx_generator_from_dwarf::cxx_type_can_have_name(shared_ptr<spec::type_die> p_d) const
+	bool cxx_generator_from_dwarf::cxx_type_can_have_name(iterator_df<type_die> p_d) const
 	{
 		/* In C++, introducing a name to a modified type requires typedef. */
-		if (p_d->get_tag() == DW_TAG_typedef) return true;
-		else if (dynamic_pointer_cast<type_chain_die>(p_d)) return false;
+		if (p_d.tag_here() == DW_TAG_typedef) return true;
+		else if (p_d.is_a<type_chain_die>()) return false;
 		else return true;
 	}
 
 	pair<string, bool>
 	cxx_generator_from_dwarf::cxx_declarator_from_type_die(
-		shared_ptr<spec::type_die> p_d, 
+		iterator_df<type_die> p_d, 
 		optional<const string&> infix_typedef_name/*= optional<const std::string&>()*/,
 		bool use_friendly_names /*= true*/,  
 		optional<const string&> extra_prefix /* = optional<const string&>() */,
@@ -184,20 +182,20 @@ namespace tool {
 	{
 		string name_prefix;
 		string qualifier_suffix;
-		switch (p_d->get_tag())
+		switch (p_d.tag_here())
 		{
 			// return the friendly compiler-determined name or not, depending on argument
 			case DW_TAG_base_type:
 				return make_pair(
 					((extra_prefix && !use_friendly_names) ? *extra_prefix : "")
-					+ local_name_for(dynamic_pointer_cast<spec::base_type_die>(p_d),
+					+ local_name_for(p_d.as_a<base_type_die>(),
 						use_friendly_names),
 					false);
 			case DW_TAG_typedef:
-				return make_pair((extra_prefix ? *extra_prefix : "") + *p_d->get_name(), false);
+				return make_pair((extra_prefix ? *extra_prefix : "") + *p_d.name_here(), false);
 			case DW_TAG_reference_type: {
-				shared_ptr<spec::reference_type_die> reference 
-				 = dynamic_pointer_cast<spec::reference_type_die>(p_d);
+				iterator_df<reference_type_die> reference 
+				 = p_d.as_a<reference_type_die>();
 				assert(reference);
 				assert(reference->get_type());
 				auto declarator = cxx_declarator_from_type_die(
@@ -207,11 +205,11 @@ namespace tool {
 				return make_pair(declarator.first + "&", declarator.second);
 			}
 			case DW_TAG_pointer_type: {
-				shared_ptr<spec::pointer_type_die> pointer 
-				 = dynamic_pointer_cast<spec::pointer_type_die>(p_d);
+				iterator_df<pointer_type_die> pointer 
+				 = p_d.as_a<pointer_type_die>();
 				if (pointer->get_type())
 				{
-//					if (pointer->get_type()->get_tag() == DW_TAG_subroutine_type)
+//					if (pointer->get_type().tag_here() == DW_TAG_subroutine_type)
 //					{
 //						// we have a pointer to a subroutine type -- pass on the infix name
 						auto declarator = cxx_declarator_from_type_die(
@@ -237,13 +235,12 @@ namespace tool {
 			}
 			case DW_TAG_array_type: {
 				// we only understand C arrays, for now
-				int language = dynamic_pointer_cast<spec::type_die>(p_d)
-					->enclosing_compile_unit()->get_language();
+				int language = p_d.enclosing_cu()->get_language();
 				assert(language == DW_LANG_C89 
 					|| language == DW_LANG_C 
 					|| language == DW_LANG_C99);
-				shared_ptr<spec::array_type_die> arr
-				 = dynamic_pointer_cast<spec::array_type_die>(p_d);
+				iterator_df<array_type_die> arr
+				 = p_d.as_a<array_type_die>();
 				// calculate array size, if we have a subrange type
 				auto array_size = arr->element_count();
 				ostringstream arrsize; 
@@ -259,8 +256,8 @@ namespace tool {
 			}
 			case DW_TAG_subroutine_type: {
 				ostringstream s;
-				shared_ptr<spec::subroutine_type_die> subroutine_type 
-				 = dynamic_pointer_cast<spec::subroutine_type_die>(p_d);
+				iterator_df<subroutine_type_die> subroutine_type 
+				 = p_d.as_a<subroutine_type_die>();
 				s << (subroutine_type->get_type() 
 					? cxx_declarator_from_type_die(subroutine_type->get_type(),
 					optional<const string&>(), 
@@ -270,29 +267,28 @@ namespace tool {
 					: string("void "));
 				s << "(" << (infix_typedef_name ? *infix_typedef_name : "")
 					<< ")(";
-				try
-				{	
-					for (auto i = p_d->get_first_child(); // terminated by exception
-							i; i = i->get_next_sibling(), s << ", ")
+				
+				auto children = p_d.children();
+				for (auto i_child = children.first; i_child != children.second; ++i_child)
+				{
+					switch (i_child.tag_here())
 					{
-						switch (i->get_tag())
-						{
-							case DW_TAG_formal_parameter:
-								s << cxx_declarator_from_type_die( 
-										dynamic_pointer_cast<spec::formal_parameter_die>(i)->get_type(),
-											optional<const string&>(), 
-											use_friendly_names, extra_prefix, 
-											use_struct_and_union_prefixes
-										).first;
-								break;
-							case DW_TAG_unspecified_parameters:
-								s << "...";
-								break;
-							default: assert(false); break;
-						}
+						case DW_TAG_formal_parameter:
+							s << cxx_declarator_from_type_die( 
+									i_child.as_a<formal_parameter_die>()->get_type(),
+										optional<const string&>(), 
+										use_friendly_names, extra_prefix, 
+										use_struct_and_union_prefixes
+									).first;
+							break;
+						case DW_TAG_unspecified_parameters:
+							s << "...";
+							break;
+						default: continue;
 					}
+					s << ", ";
 				}
-				catch (lib::No_entry) { s << ")"; }
+				s << ")"; 
 				return make_pair(s.str(), true);
 			}
 			case DW_TAG_const_type:
@@ -319,7 +315,7 @@ namespace tool {
 				/* This is complicated by the fact that array types in C/C++ can't be qualified directly,
 				 * but such qualified types can be defined using typedefs. (FIXME: I think this is correct
 				 * but don't quote me -- there might just be some syntax I'm missing.) */
-				auto chained_type =  dynamic_pointer_cast<spec::type_chain_die>(p_d)->get_type();
+				iterator_df<type_die> chained_type =  p_d.as_a<type_chain_die>()->get_type();
 				/* Note that many DWARF emitters record C/C++ "const void" (as in "const void *")
 				 * as a const type with no "type" attribute. So handle this case. */
 				if (!chained_type) return make_pair("void" + qualifier_suffix, false);
@@ -341,31 +337,31 @@ namespace tool {
 						+ " " + qualifier_suffix, false);
 
 					//throw Not_supported(string("C++ qualifiers for types of tag ")
-					//	 + p_d->get_spec().tag_lookup(chained_type->get_tag()));
+					//	 + p_d.spec_here().tag_lookup(chained_type.tag_here()));
 				}
 			}
 		}
 	}
 	
 	bool 
-	cxx_generator_from_dwarf::is_builtin(shared_ptr<spec::basic_die> p_d)
+	cxx_generator_from_dwarf::is_builtin(iterator_df<basic_die> p_d)
 	{ 
-		bool retval = p_d->get_name() && p_d->get_name()->find("__builtin_") == 0;
+		bool retval = p_d.name_here() && p_d.name_here()->find("__builtin_") == 0;
 		if (retval) cerr << 
 			"Warning: DIE at 0x" 
-			<< hex << p_d->get_offset() << dec 
+			<< hex << p_d.offset_here() << dec 
 			<< " appears builtin and will be ignored." << endl;
 		return retval; 
 	}
 
 	vector<string> 
 	cxx_generator_from_dwarf::local_name_parts_for(
-		shared_ptr<spec::basic_die> p_d,
+		iterator_df<basic_die> p_d,
 		bool use_friendly_names /* = true */)
 	{ 
-		if (use_friendly_names && p_d->get_tag() == DW_TAG_base_type)
+		if (use_friendly_names && p_d.tag_here() == DW_TAG_base_type)
 		{
-			auto opt_name = name_for_base_type(dynamic_pointer_cast<spec::base_type_die>(p_d));
+			auto opt_name = name_for_base_type(p_d.as_a<base_type_die>());
 			if (opt_name) return vector<string>(1, *opt_name);
 			else assert(false);
 		}
@@ -376,11 +372,11 @@ namespace tool {
 	}
 
 	vector<string> 
-	cxx_generator_from_dwarf::fq_name_parts_for(shared_ptr<spec::basic_die> p_d)
+	cxx_generator_from_dwarf::fq_name_parts_for(iterator_df<basic_die> p_d)
 	{
-		if (p_d->get_offset() != 0UL && p_d->get_parent()->get_tag() != DW_TAG_compile_unit)
+		if (p_d.offset_here() != 0UL && p_d.parent().tag_here() != DW_TAG_compile_unit)
 		{
-			auto parts = fq_name_parts_for(p_d->get_parent());
+			auto parts = fq_name_parts_for(p_d.parent());
 			parts.push_back(cxx_name_from_die(p_d));
 			return parts;
 		}
@@ -396,8 +392,8 @@ namespace tool {
 	
 	bool 
 	cxx_generator_from_dwarf::cxx_assignable_from(
-		shared_ptr<spec::type_die> dest,
-		shared_ptr<spec::type_die> source
+		iterator_df<type_die> dest,
+		iterator_df<type_die> source
 	)
 	{
 		// FIXME: better approximation of C++ assignability rules goes here
@@ -406,38 +402,35 @@ namespace tool {
 		 * - pointers to fq-nominally equal types, or
 		 * - fq-nominally equal structured types _within the same dieset_ */
 
-		if (dest->get_tag() == DW_TAG_base_type && source->get_tag() == DW_TAG_base_type)
+		if (dest.tag_here() == DW_TAG_base_type && source.tag_here() == DW_TAG_base_type)
 		{ return true; }
 
-		if (dest->get_tag() == DW_TAG_structure_type 
-		&& source->get_tag() == DW_TAG_structure_type)
+		if (dest.tag_here() == DW_TAG_structure_type 
+		&& source.tag_here() == DW_TAG_structure_type)
 		{
 			return fq_name_for(source) == fq_name_for(dest)
-				&& &source->get_ds() == &dest->get_ds();
+				&& &source.root() == &dest.root();
 		}
 
-		if (dest->get_tag() == DW_TAG_pointer_type
-		&& source->get_tag() == DW_TAG_pointer_type)
+		if (dest.tag_here() == DW_TAG_pointer_type
+		&& source.tag_here() == DW_TAG_pointer_type)
 		{
-			if (!dynamic_pointer_cast<spec::pointer_type_die>(dest)->get_type())
+			if (!dest.as_a<pointer_type_die>()->get_type())
 			{
 				return true; // can always assign to void
 			}
 			else return 
-				dynamic_pointer_cast<spec::pointer_type_die>(source)
-					->get_type()
-				&& fq_name_for(dynamic_pointer_cast<spec::pointer_type_die>(source)
-					->get_type()) 
+				source.as_a<pointer_type_die>()->get_type()
+				&& fq_name_for(source.as_a<pointer_type_die>()->get_type()) 
 					== 
-					fq_name_for(dynamic_pointer_cast<spec::pointer_type_die>(dest)
-					->get_type());
+					fq_name_for(dest.as_a<pointer_type_die>()->get_type());
 		}
 
 		return false;
 	}
 
 	bool 
-	cxx_generator_from_dwarf::cxx_is_complete_type(shared_ptr<spec::type_die> t)
+	cxx_generator_from_dwarf::cxx_is_complete_type(iterator_df<type_die> t)
 	{
 		t = t->get_concrete_type();
 		if (!t) return false;
@@ -445,7 +438,7 @@ namespace tool {
 // 		// if we can't find a definition, we're not complete
 // 		if (t->get_declaration() && *t->get_declaration()) 
 // 		{
-// 			auto with_data_members = dynamic_pointer_cast<with_data_members_die>(t);
+// 			auto with_data_members = t.as_a<with_data_members_die>();
 // 			if (with_data_members)
 // 			{
 // 				auto defn = with_data_members->find_my_own_definition();
@@ -458,33 +451,31 @@ namespace tool {
 		if (t->get_declaration() && *t->get_declaration()) 
 		{
 			return false;
+			// FIXME: use basic_die::find_definition
 		}
 		
-		if (t->get_tag() == DW_TAG_array_type)
+		if (t.tag_here() == DW_TAG_array_type)
 		{
-			if (!dynamic_pointer_cast<spec::array_type_die>(t)
-				->element_count()
-			|| *dynamic_pointer_cast<spec::array_type_die>(t)
-				->element_count() == 0)
+			if (!t.as_a<array_type_die>()->element_count()
+			|| *t.as_a<array_type_die>()->element_count() == 0)
 			{
 				return false;
 			}
 			else return true;
 		}
+		
 		// if we're structured, we're complete iff 
 		// we don't have the "declaration" flag
 		// and all members are complete
-		if (dynamic_pointer_cast<spec::with_named_children_die>(t))
+		if (t.is_a<with_named_children_die>())
 		{
-			auto nc = dynamic_pointer_cast<spec::with_named_children_die>(t);
+			auto nc = t.as_a<with_named_children_die>();
 			//cerr << "DEBUG: testing completeness of cxx type for " << *t << endl;
-			for (auto i_member = t->children_begin(); 
-				i_member != t->children_end();
-				i_member++)
+			auto ms = t.children().subseq_of<member_die>();
+			for (auto i_member = ms.first; i_member != ms.second; ++i_member)
 			{
-				if ((*i_member)->get_tag() != DW_TAG_member) continue;
-				auto memb = dynamic_pointer_cast<spec::member_die>(*i_member);
-				auto memb_opt_type = memb->get_type();
+				assert(i_member->get_tag() == DW_TAG_member);
+				auto memb_opt_type = i_member->get_type();
 				if (!memb_opt_type)
 				{
 					return false;
@@ -501,7 +492,7 @@ namespace tool {
 	
 	pair<string, bool>
 	cxx_generator_from_dwarf::name_for_type(
-		shared_ptr<spec::type_die> p_d, 
+		iterator_df<type_die> p_d, 
 		boost::optional<const string&> infix_typedef_name /*= none*/,
 		bool use_friendly_names/*= true*/)
 	{
@@ -514,8 +505,8 @@ namespace tool {
 // 		catch (dwarf::lib::Not_supported)
 // 		{
 // 			// HACK around this strange (const (array)) case
-// 			if (p_d->get_tag() == DW_TAG_const_type
-// 			 && dynamic_pointer_cast<const_type_die>(p_d)->get_type()->get_concrete_type()->get_tag()
+// 			if (p_d.tag_here() == DW_TAG_const_type
+// 			 && dynamic_pointer_cast<const_type_die>(p_d)->get_type()->get_concrete_type().tag_here()
 // 			 	== DW_TAG_array_type)
 // 			{
 // 				// assume that we will be emitting a typedef for the const type itself,
@@ -529,24 +520,24 @@ namespace tool {
 
 	string 
 	cxx_generator_from_dwarf::name_for_argument(
-		shared_ptr<spec::formal_parameter_die> p_d, 
+		iterator_df<formal_parameter_die> p_d, 
 		int argnum
 	)
 	{
 		std::ostringstream s;
 		//std::cerr << "called name_for_argument on argument position " << argnum << ", ";
-		if (p_d->get_name()) { /*std::cerr << "named ";*/ s << "_dwarfhpp_arg_" << *p_d->get_name(); /*std::cerr << *d.get_name();*/ }
+		if (p_d.name_here()) { /*std::cerr << "named ";*/ s << "_dwarfhpp_arg_" << *p_d.name_here(); /*std::cerr << *d.get_name();*/ }
 		else { /*std::cerr << "anonymous";*/ s << "_dwarfhpp_anon_arg_" << argnum; }
 		//std::cerr << std::endl;
 		return s.str();
 	} 
 
 	string cxx_generator_from_dwarf::create_ident_for_anonymous_die(
-		shared_ptr<spec::basic_die> p_d
+		iterator_df<basic_die> p_d
 	)
 	{
 		std::ostringstream s;
-		s << "_dwarfhpp_anon_" << std::hex << p_d->get_offset();
+		s << "_dwarfhpp_anon_" << std::hex << p_d.offset_here();
 		return s.str();
 	}
 	
@@ -577,7 +568,7 @@ namespace tool {
 	
 	string 
 	cxx_generator_from_dwarf::make_typedef(
-		shared_ptr<spec::type_die> p_d,
+		iterator_df<type_die> p_d,
 		const string& name
 	)
 	{
@@ -601,7 +592,7 @@ namespace tool {
 	
 	string
 	cxx_generator_from_dwarf::make_function_declaration_of_type(
-		shared_ptr<spec::subroutine_type_die> p_d,
+		iterator_df<subroutine_type_die> p_d,
 		const string& name,
 		bool write_semicolon /* = true */,
 		bool wrap_with_extern_lang /* = true */
@@ -611,7 +602,7 @@ namespace tool {
 		string name_to_use = cxx_name_from_string(name, "_dwarfhpp_");
 		
 		string lang_to_use;
-		switch (p_d->enclosing_compile_unit()->get_language())
+		switch (p_d.enclosing_cu()->get_language())
 		{
 			case DW_LANG_C:
 			case DW_LANG_C89:
@@ -634,26 +625,25 @@ namespace tool {
 		out << " " << name << "(";
 		
 		bool written_an_arg = false;
-		for (auto i_fp = p_d->formal_parameter_children_begin();
-			i_fp != p_d->formal_parameter_children_end();
-			++i_fp)
+		auto fp_children = p_d.children().subseq_of<formal_parameter_die>();
+		for (auto i_fp = fp_children.first; i_fp != fp_children.second; ++i_fp)
 		{
-			if (i_fp != p_d->formal_parameter_children_begin()) out << ", ";
+			if (i_fp != fp_children.first) out << ", ";
 			
-			if ((*i_fp)->get_type())
+			if (i_fp->get_type())
 			{
-				auto declarator = ((*i_fp)->get_name())
-					? name_for_type((*i_fp)->get_type(), *(*i_fp)->get_name())
-					: name_for_type((*i_fp)->get_type());
+				auto declarator = (i_fp.base().base().name_here())
+					? name_for_type(i_fp->get_type(), *i_fp.base().base().name_here())
+					: name_for_type(i_fp->get_type());
 				out << declarator.first;
 				if (!declarator.second) out << " " 
-					<< ((*i_fp)->get_name() ? *(*i_fp)->get_name() : "");
-				else out << "void *" << ((*i_fp)->get_name() ? *(*i_fp)->get_name() : "");
+					<< (i_fp.base().base().name_here() ? *i_fp.base().base().name_here() : "");
+				else out << "void *" << (i_fp.base().base().name_here() ? *i_fp.base().base().name_here() : "");
 				written_an_arg = true;
 			}
 		}
-		if (p_d->unspecified_parameters_children_begin() != 
-			p_d->unspecified_parameters_children_end())
+		auto unspec_children = p_d.children().subseq_of<unspecified_parameters_die>();
+		if (unspec_children.first != unspec_children.second)
 		{
 			if (written_an_arg) out << ", ";
 			out << "...";
@@ -673,10 +663,10 @@ namespace tool {
 	void 
 	cxx_generator_from_dwarf::emit_model(
 		srk31::indenting_ostream& out,
-		abstract_dieset::iterator i_d
+		const iterator_base& i_d
 	)
 	{
-		assert((*i_d)->get_tag() == Tag);
+		assert(i_d.tag_here() == Tag);
 		out << "// FIXME: DIEs of tag " << Tag << endl;
 		return;
 	}
@@ -685,40 +675,39 @@ namespace tool {
 	void 
 	cxx_generator_from_dwarf::recursively_emit_children(
 		indenting_ostream& out,
-		abstract_dieset::iterator i_d,
+		const iterator_base& p_d,
 		const Pred& pred /* = Pred() */
 	)
 	{ 
-		auto p_d = *i_d;
 		//out.inc_level(); 
 		bool not_yet_inced = true; // we delay inc'ing because it emits a newline...
-		for (dwarf::spec::abstract_dieset::iterator i = p_d->children_begin(); 
-				i != p_d->children_end(); ++i)
+		auto children = p_d.children();
+		for (auto i_child = children.first; i_child != children.second; ++i_child)
 		{
 			// if the caller asked only for a subset of children, we oblige
-			if (!pred(*i)) continue;
+			if (!pred(i_child)) continue;
 			
 			// ... and we don't want the newline uness we actually have children
 			if (not_yet_inced) { out.inc_level(); not_yet_inced = false; }
 			
 			// emit_mode<0> does a dynamic dispatch on the tag
 			// (could really be a separate function, rather than the <0> specialization)
-			dispatch_to_model_emitter(out, i);
+			dispatch_to_model_emitter(out, i_child);
 		}
 		if (!not_yet_inced) out.dec_level(); 
 	}
 
 	// define specializations here
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_base_type>             (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_base_type>             (indenting_ostream& out, const iterator_base& i_d)
 	{
-		auto p_d = dynamic_pointer_cast<base_type_die>(*i_d);
+		auto p_d = i_d.as_a<base_type_die>();
 		optional<string> type_name_in_compiler = 
 			name_for_base_type(p_d);
 
 		if (!type_name_in_compiler) return; // FIXME: could define a C++ ADT!
 
 		auto our_name_for_this_type = name_for_type(
-			dynamic_pointer_cast<spec::type_die>(p_d), 
+			p_d.as_a<type_die>(), 
 			0 /* no infix */, 
 			false /* no friendly names*/);
 		assert(!our_name_for_this_type.second);
@@ -731,16 +720,15 @@ namespace tool {
 		}
 	}
 
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subprogram>            (indenting_ostream& out, abstract_dieset::iterator i_d) 
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subprogram>            (indenting_ostream& out, const iterator_base& i_d) 
 	{
-		auto p_d = dynamic_pointer_cast<subprogram_die>(*i_d);
+		auto p_d = i_d.as_a<subprogram_die>();
 		
 		// skip unnamed, for now (FIXME)
-		if (!p_d->get_name() || (*p_d->get_name()).empty()) return;
+		if (!p_d.name_here() || (*p_d.name_here()).empty()) return;
 
 		// wrap with extern "lang"
-		switch(dynamic_pointer_cast<compile_unit_die>(
-			p_d->enclosing_compile_unit())->get_language())
+		switch(p_d.enclosing_cu()->get_language())
 		{
 			case DW_LANG_C:
 			case DW_LANG_C89:
@@ -752,7 +740,7 @@ namespace tool {
 					return;
 				}
 				out << "extern \"C\" { /* C-language subprogram DIE at 0x" 
-					<< std::hex << p_d->get_offset() << std::dec << " */" << endl;
+					<< std::hex << p_d.offset_here() << std::dec << " */" << endl;
 				break;
 			default:
 				assert(false);
@@ -763,7 +751,7 @@ namespace tool {
 					: std::string("void")
 				)
 			<< ' '
-			<< *p_d->get_name()
+			<< *p_d.name_here()
 			<< '(';		
 
 		/* recurse on children -- we do children in a particular order!
@@ -771,15 +759,15 @@ namespace tool {
 		 * then unspecified parameters,
 		 * then others. */
 		recursively_emit_children(out, i_d, 
-			[](shared_ptr<basic_die> p){ return p->get_tag() == DW_TAG_formal_parameter; }
+			[](iterator_df<basic_die> p){ return p.tag_here() == DW_TAG_formal_parameter; }
 		);
 		recursively_emit_children(out, i_d, 
-			[](shared_ptr<basic_die> p){ return p->get_tag() == DW_TAG_unspecified_parameters; }
+			[](iterator_df<basic_die> p){ return p.tag_here() == DW_TAG_unspecified_parameters; }
 		);
 		recursively_emit_children(out, i_d, 
-			[](shared_ptr<basic_die> p){ 
-				return p->get_tag() != DW_TAG_unspecified_parameters
-				    && p->get_tag() != DW_TAG_formal_parameter; }
+			[](iterator_df<basic_die> p){ 
+				return p.tag_here() != DW_TAG_unspecified_parameters
+				    && p.tag_here() != DW_TAG_formal_parameter; }
 		);
 		
 		// end the prototype
@@ -789,21 +777,21 @@ namespace tool {
 		out << "}" << std::endl;
 	}
 
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_formal_parameter>      (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_formal_parameter>      (indenting_ostream& out, const iterator_base& i_d)
 	{
-		auto p_d = dynamic_pointer_cast<spec::formal_parameter_die>(*i_d);
+		auto p_d = i_d.as_a<formal_parameter_die>();
 	
 		// recover arg position
 		int argpos = 0;
-		shared_ptr<subprogram_die> p_subp = dynamic_pointer_cast<subprogram_die>(
-			(*i_d)->get_parent());
+		auto p_subp = i_d.parent().as_a<subprogram_die>();
 
-		auto i = p_subp->formal_parameter_children_begin();
-		while (i != p_subp->formal_parameter_children_end() 
-			&& (*i)->get_offset() != (*i_d)->get_offset())
+		auto fps = p_subp->children().subseq_of<formal_parameter_die>();
+		auto i = fps.first;
+		while (i != fps.second
+			&& i->get_offset() != i_d.offset_here())
 		{ argpos++; i++; }
-
-		assert(i != p_subp->formal_parameter_children_end());
+		// we should find ourselves
+		assert(i != fps.second);
 
 		if (argpos != 0) out << ", ";
 
@@ -815,16 +803,15 @@ namespace tool {
 			<< protect_ident(name_for_argument(p_d, argpos));
 	}
 
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_unspecified_parameters>(indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_unspecified_parameters>(indenting_ostream& out, const iterator_base& i_d)
 	{
-		auto p_d = dynamic_pointer_cast<unspecified_parameters_die>(*i_d);
+		auto p_d = i_d.as_a<unspecified_parameters_die>();
 		
 		// were there any specified args?
-		shared_ptr<subprogram_die> p_subp
-		 = dynamic_pointer_cast<subprogram_die>(p_d->get_parent());
+		auto p_subp = p_d.parent().as_a<subprogram_die>();
 
-		if (p_subp->formal_parameter_children_begin()
-			 != p_subp->formal_parameter_children_end())
+		auto fps = p_subp.children().subseq_of<formal_parameter_die>();
+		if (fps.first != fps.second)
 		{
 			out << ", ";
 		}
@@ -832,21 +819,21 @@ namespace tool {
 		out << "...";
 	}
 
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_array_type>            (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_array_type>            (indenting_ostream& out, const iterator_base& i_d)
 	{
 		out << make_typedef(
-			dynamic_pointer_cast<spec::type_die>(*i_d),
-			create_ident_for_anonymous_die(*i_d)
+			i_d.as_a<type_die>(),
+			create_ident_for_anonymous_die(i_d)
 		);
 	}
 
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_enumeration_type>      (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_enumeration_type>      (indenting_ostream& out, const iterator_base& i_d)
 	{
 		out << "enum " 
 			<< protect_ident(
-				((*i_d)->get_name() 
-					? *(*i_d)->get_name() 
-					: create_ident_for_anonymous_die(*i_d)
+				(i_d.name_here() 
+					? *i_d.name_here() 
+					: create_ident_for_anonymous_die(i_d)
 				)
 			)
 			<< " { " << std::endl;
@@ -856,33 +843,33 @@ namespace tool {
 		out << endl << "};" << endl;
 	}
 
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_member>                (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_member>                (indenting_ostream& out, const iterator_base& i_d)
 	{
-		auto p_d = dynamic_pointer_cast<member_die>(*i_d);
+		auto p_d = i_d.as_a<member_die>();
 		
 		/* To reproduce the member's alignment, we always issue an align attribute. 
 		 * We choose our alignment so as to ensure that the emitted field is located
 		 * at the offset specified in DWARF. */
-		shared_ptr<type_die> member_type = transform_type(p_d->get_type(), i_d);
+		auto member_type = transform_type(p_d->get_type(), i_d);
 
 		// recover the previous formal parameter's offset and size
-		shared_ptr<spec::with_data_members_die> p_type = 
-			dynamic_pointer_cast<spec::with_data_members_die>(p_d->get_parent());
+		iterator_df<with_data_members_die> p_type = p_d.parent().as_a<with_data_members_die>();
 		assert(p_type);
-		auto i = p_type->member_children_begin();
-		auto prev_i = p_type->member_children_end();
-		while (i != p_type->member_children_end() 
-			&& (*i)->get_offset() != p_d->get_offset()) 
+		auto ms = p_type.children().subseq_of<member_die>();
+		auto i = ms.first;
+		auto prev_i = ms.second; // initially
+		while (i != ms.second
+			&& i.base().base().offset_here() != p_d.offset_here())
 		{ prev_i = i; ++i; }
 		
 		// now i points to us, and prev_i to our predecessor
-		assert(i != p_type->member_children_end()); // would mean we failed to find ourselves
+		assert(i != ms.second); // would mean we failed to find ourselves
 
 		Dwarf_Unsigned cur_offset;
-		if (prev_i == p_type->member_children_end()) cur_offset = 0;
+		if (prev_i == ms.second) cur_offset = 0;
 		else 
 		{
-			shared_ptr<member_die> prev_member = dynamic_pointer_cast<member_die>(*prev_i);
+			auto prev_member = prev_i.base().base().as_a<member_die>();
 			assert(prev_member->get_type());
 
 			if (prev_member->get_data_member_location())
@@ -900,7 +887,7 @@ namespace tool {
 				{
 					cur_offset = evaluator(
 						prev_member->get_data_member_location()->at(0), 
-						p_d->get_ds().get_spec(),
+						p_d.spec_here(),
 						stack<Dwarf_Unsigned>(
 							// push zero as the initial stack value
 							deque<Dwarf_Unsigned>(1, 0UL)
@@ -911,8 +898,8 @@ namespace tool {
 			}
 			else
 			{
-				cerr << "no data member location: context die is " << *p_d->get_parent() << endl;
-				cur_offset = (p_d->get_parent()->get_tag() == DW_TAG_union_type) 
+				cerr << "no data member location: context die is " << p_d.parent() << endl;
+				cur_offset = (p_d.parent().tag_here() == DW_TAG_union_type) 
 					? 0 : std::numeric_limits<Dwarf_Unsigned>::max();
 			}
 		}
@@ -924,8 +911,8 @@ namespace tool {
 		string name_to_use = cxx_name_from_die(p_d);
 
 		auto declarator = name_for_type(member_type, name_to_use);
-		// (p_d->get_name())
-		//	? name_for_type(member_type, *p_d->get_name())
+		// (p_d.name_here())
+		//	? name_for_type(member_type, *p_d.name_here())
 		//	: name_for_type(member_type, optional<const string&>());
 		
 		out << protect_ident(declarator.first);
@@ -939,7 +926,7 @@ namespace tool {
 		{
 			Dwarf_Unsigned target_offset = evaluator(
 				p_d->get_data_member_location()->at(0), 
-				p_d->get_ds().get_spec(),
+				p_d.spec_here(),
 				stack<Dwarf_Unsigned>(
 					// push zero as the initial stack value
 					deque<Dwarf_Unsigned>(1, 0UL)
@@ -1026,19 +1013,19 @@ namespace tool {
 		}
 	}
 
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_pointer_type>          (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_pointer_type>          (indenting_ostream& out, const iterator_base& i_d)
 	{
-		auto p_d = dynamic_pointer_cast<pointer_type_die>(*i_d);
+		auto p_d = i_d.as_a<pointer_type_die>();
 		
 		// we always emit a typedef with synthetic name
 		// (but the user could just use the pointed-to type and "*")
 
 		// std::cerr << "pointer type: " << d << std::endl;
-		//assert(!d.get_name() || (d.get_type() && d.get_type()->get_tag() == DW_TAG_subroutine_type));
+		//assert(!d.get_name() || (d.get_type() && d.get_type().tag_here() == DW_TAG_subroutine_type));
 
 		std::string name_to_use
-		 = p_d->get_name() 
-		 ? cxx_name_from_string(*p_d->get_name(), "_dwarfhpp_") 
+		 = p_d.name_here() 
+		 ? cxx_name_from_string(*p_d.name_here(), "_dwarfhpp_") 
 		 : create_ident_for_anonymous_die(p_d);
 
 		if (!p_d->get_type())
@@ -1049,23 +1036,23 @@ namespace tool {
 		}
 		else 
 		{
-			out << make_typedef(dynamic_pointer_cast<spec::type_die>(p_d), name_to_use);
+			out << make_typedef(p_d.as_a<type_die>(), name_to_use);
 		}
 	}
 	
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_reference_type>        (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_reference_type>        (indenting_ostream& out, const iterator_base& i_d)
 	{
-		auto p_d = dynamic_pointer_cast<reference_type_die>(*i_d);
+		auto p_d = i_d.as_a<reference_type_die>();
 		
 		// we always emit a typedef with synthetic name
 		// (but the user could just use the pointed-to type and "*")
 
 		// std::cerr << "pointer type: " << d << std::endl;
-		//assert(!d.get_name() || (d.get_type() && d.get_type()->get_tag() == DW_TAG_subroutine_type));
+		//assert(!d.get_name() || (d.get_type() && d.get_type().tag_here() == DW_TAG_subroutine_type));
 
 		std::string name_to_use
-		 = p_d->get_name() 
-		 ? cxx_name_from_string(*p_d->get_name(), "_dwarfhpp_") 
+		 = p_d.name_here() 
+		 ? cxx_name_from_string(*p_d.name_here(), "_dwarfhpp_") 
 		 : create_ident_for_anonymous_die(p_d);
 
 		if (!p_d->get_type())
@@ -1076,19 +1063,19 @@ namespace tool {
 		}
 		else 
 		{
-			out << make_typedef(dynamic_pointer_cast<spec::type_die>(p_d), name_to_use);
+			out << make_typedef(p_d.as_a<type_die>(), name_to_use);
 		}
 	}
 
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_structure_type>        (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_structure_type>        (indenting_ostream& out, const iterator_base& i_d)
 	{
-		auto p_d = dynamic_pointer_cast<structure_type_die>(*i_d);
+		auto p_d = i_d.as_a<structure_type_die>();
 		
 		out << "struct " 
 			<< protect_ident(
-				p_d->get_name() 
-				?  *p_d->get_name() 
-				: create_ident_for_anonymous_die(p_d->shared_from_this())
+				p_d.name_here() 
+				?  *p_d.name_here() 
+				: create_ident_for_anonymous_die(i_d)
 				);
 		if (!(p_d->get_declaration() && *p_d->get_declaration()))
 		{
@@ -1101,44 +1088,44 @@ namespace tool {
 		else
 		{
 			/* struct declarations shouldn't have any member children */
-			assert(srk31::count(p_d->member_children_begin(), p_d->member_children_end())
-				== 0);
+			auto ms = p_d.children().subseq_of<member_die>();
+			assert(srk31::count(ms.first, ms.second) == 0);
 		}
 		out << ";" << std::endl;
 	}
 	
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subroutine_type>       (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subroutine_type>       (indenting_ostream& out, const iterator_base& i_d)
 	{
-		std::cerr << "Warning: assuming subroutine type at 0x" << std::hex << (*i_d)->get_offset() 
+		std::cerr << "Warning: assuming subroutine type at 0x" << std::hex << i_d.offset_here() 
 			<< std::dec << " is the target of some pointer type or typedef; skipping." << std::endl;
 	}
 
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_typedef>               (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_typedef>               (indenting_ostream& out, const iterator_base& i_d)
 	{
-		auto p_d = dynamic_pointer_cast<typedef_die>(*i_d);
-		assert(p_d->get_name());
+		auto p_d = i_d.as_a<typedef_die>();
+		assert(p_d.name_here());
 		if (!p_d->get_type())
 		{
-			std::cerr << "Warning: using `void' for typeless typedef: " << *p_d << std::endl;		
-			out << "typedef void " << protect_ident(*p_d->get_name()) << ";" << std::endl;
+			std::cerr << "Warning: using `void' for typeless typedef: " << p_d << std::endl;		
+			out << "typedef void " << protect_ident(*p_d.name_here()) << ";" << std::endl;
 			return;
 		}
 		out << make_typedef(transform_type(p_d->get_type(), i_d),
-			*p_d->get_name() 
+			*p_d.name_here() 
 		);
 	}
 
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_union_type>            (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_union_type>            (indenting_ostream& out, const iterator_base& i_d)
 	{
-		auto p_d = dynamic_pointer_cast<union_type_die>(*i_d);
+		auto p_d = i_d.as_a<union_type_die>();
 		
 		/* FIXME: this needs the same treatment of forward declarations
 		 * that structure_type gets. */
 		
 		out << "union " 
 			<< protect_ident(
-				p_d->get_name() 
-				? *p_d->get_name() 
+				p_d.name_here() 
+				? *p_d.name_here() 
 				: create_ident_for_anonymous_die(p_d)
 				)
 			<< " { " << std::endl;
@@ -1148,9 +1135,9 @@ namespace tool {
 		out << "};" << std::endl;
 	}
 
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_const_type>            (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_const_type>            (indenting_ostream& out, const iterator_base& i_d)
 	{
-		auto p_d = dynamic_pointer_cast<const_type_die>(*i_d);
+		auto p_d = i_d.as_a<const_type_die>();
 		
 		// we always emit a typedef with synthetic name
 		// (but the user could just use the pointed-to type and "const")
@@ -1158,7 +1145,7 @@ namespace tool {
 		try
 		{
 			out << make_typedef(
-				dynamic_pointer_cast<spec::type_die>(p_d),
+				p_d.as_a<type_die>(),
 				create_ident_for_anonymous_die(p_d)
 			);
 		}
@@ -1178,34 +1165,33 @@ namespace tool {
 		}
 	}
 	
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_constant>              (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_constant>              (indenting_ostream& out, const iterator_base& i_d)
 	{}
 
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_enumerator>            (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_enumerator>            (indenting_ostream& out, const iterator_base& i_d)
 	{
-		auto p_d = dynamic_pointer_cast<enumerator_die>(*i_d);
+		auto p_d = i_d.as_a<enumerator_die>();
 		
 		// FIXME
-		if ((*dynamic_pointer_cast<enumeration_type_die>(p_d->get_parent())
-			->enumerator_children_begin())
-				->get_offset() != p_d->get_offset()) // .. then we're not the first, so
-				out << ", " << endl;
-		out << protect_ident(*p_d->get_name());
+		auto parent = p_d.parent().as_a<enumeration_type_die>();
+		if (parent.children().subseq_of<enumeration_type_die>().first.base().base() != p_d)
+		{ out << ", " << endl; }
+		out << protect_ident(*p_d.name_here());
 	}
 	
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_variable>              (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_variable>              (indenting_ostream& out, const iterator_base& i_d)
 	{}
 
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_volatile_type>         (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_volatile_type>         (indenting_ostream& out, const iterator_base& i_d)
 	{
-		auto p_d = dynamic_pointer_cast<volatile_type_die>(*i_d);
+		auto p_d = i_d.as_a<volatile_type_die>();
 		// we always emit a typedef with synthetic name
 		// (but the user could just use the pointed-to type and "const")
 
 		try
 		{
 			out << make_typedef(
-				dynamic_pointer_cast<spec::type_die>(p_d),
+				p_d.as_a<type_die>(),
 				create_ident_for_anonymous_die(p_d)
 			);
 		}
@@ -1219,22 +1205,22 @@ namespace tool {
 		}
 	}
 	
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_restrict_type>         (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_restrict_type>         (indenting_ostream& out, const iterator_base& i_d)
 	{}
 	
-	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subrange_type>         (indenting_ostream& out, abstract_dieset::iterator i_d)
+	template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subrange_type>         (indenting_ostream& out, const iterator_base& i_d)
 	{
-		auto p_d = dynamic_pointer_cast<subrange_type_die>(*i_d);
+		auto p_d = i_d.as_a<subrange_type_die>();
 		// Since we can't express subranges directly in C++, we just
 		// emit a typedef of the underlying type.
 		out << "typedef " 
 			<< protect_ident(name_for_type( 
-				dynamic_pointer_cast<spec::type_chain_die>(p_d)->get_type()).first
+				p_d.as_a<type_chain_die>()->get_type()).first
 				)
 			<< " " 
 			<< protect_ident(
-				p_d->get_name() 
-				? *p_d->get_name() 
+				p_d.name_here() 
+				? *p_d.name_here() 
 				: create_ident_for_anonymous_die(p_d)
 				)
 			<< ";" << std::endl;
@@ -1242,7 +1228,7 @@ namespace tool {
 
 /* from dwarf::tool::cxx_target */
 	optional<string>
-	cxx_target::name_for_base_type(shared_ptr<spec::base_type_die> p_d)
+	cxx_target::name_for_base_type(iterator_df<base_type_die> p_d)
 	{
 		map<base_type, string>::iterator found = base_types.find(
 			base_type(p_d));
