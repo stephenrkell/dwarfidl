@@ -98,7 +98,12 @@ void dwarfidl_cxx_target::emit_all_decls(root_die& r)
 			//&& (!i_subp->get_visibility() || *i_subp->get_visibility() == DW_VIS_exported)
 			//&& (subprogram_names.find(*i_subp.name_here()) != subprogram_names.end());
 	});
+	
+	emit_decls(dies);
+}
 
+void dwarfidl_cxx_target::emit_decls(const set<iterator_base>& dies)
+{
 	/* We now don't bother doing the topological sort, so we just
 	 * forward-declare everything that we can. */
 	set<iterator_base> to_fd;
@@ -111,7 +116,9 @@ void dwarfidl_cxx_target::emit_all_decls(root_die& r)
 		}
 	}
 	emit_forward_decls(to_fd);
-		
+	
+	set<iterator_base> emitted;
+	
 	for (auto i_i_d = dies.begin(); i_i_d != dies.end(); ++i_i_d)
 	{
 		auto i_d = *i_i_d;
@@ -121,7 +128,7 @@ void dwarfidl_cxx_target::emit_all_decls(root_die& r)
 			out,
 			i_d,
 			// this is our predicate
-			[&toplevel_decls_emitted, this](iterator_base i)
+			[/*&toplevel_decls_emitted, */&emitted, this](iterator_base i)
 			{
 // 					/* We check whether we've been declared already */
 // 					auto opt_ident_path = p_d->ident_path_from_cu();
@@ -196,8 +203,12 @@ void dwarfidl_cxx_target::emit_all_decls(root_die& r)
 // 						}
 // 					} // end if already declared with this 
 
-				// not a conflict-creating redeclaration, so go ahead
-				return true;
+				// we remember what we've okayed and never okay the same thing twice
+				if (emitted.find(i) == emitted.end())
+				{
+					emitted.insert(i);
+					return true;
+				} else return false;
 			}
 		); 
 	} 
