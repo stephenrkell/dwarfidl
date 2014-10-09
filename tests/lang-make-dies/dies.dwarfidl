@@ -1,0 +1,4 @@
+base_type int [byte_size = 4, encoding = 5 /* signed */ ];
+typedef new_int : int;
+structure_type newstruct { member : int; member : (array_type [type = int] {}); };
+structure_type newunion { member : newstruct; member : (array_type [type = unsigned\ int] {}); };
