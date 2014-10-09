@@ -30,7 +30,7 @@ namespace dwarfidl
 				if (attr != DW_AT_name)
 				{
 					/* unless we're naming something, resolve this ident */
-					std::vector<string> name(1, CCP(GET_TEXT(d)));
+					std::vector<string> name(1, unescape_ident(CCP(GET_TEXT(d))));
 					auto found = context.root().scoped_resolve(context,
 						name.begin(), name.end());
 					assert(found);
@@ -41,7 +41,7 @@ namespace dwarfidl
 				}
 				else
 				{
-					string name = CCP(GET_TEXT(d));
+					string name = unescape_ident(CCP(GET_TEXT(d)));
 					return attribute_value(name);
 				}
 			} break;
@@ -140,7 +140,7 @@ namespace dwarfidl
 						 * the latter case. */
 						if (to_lower_copy(string(CCP(GET_TEXT(attr)))) == "name") break;
 					
-						vector<string> name(1, string(CCP(GET_TEXT(value))));
+						vector<string> name(1, string(unescape_ident(CCP(GET_TEXT(value)))));
 						iterator_base found = parent.root().scoped_resolve(parent, 
 							name.begin(), name.end());
 						if (!found) goto name_lookup_error;

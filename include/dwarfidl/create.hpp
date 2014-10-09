@@ -2,10 +2,7 @@
 #ifndef DWARFIDL_CREATE_HPP_
 #define DWARFIDL_CREATE_HPP_
 
-#define LEXER_INCLUDE "dwarfidl/dwarfidlSimpleCLexer.h"
-#define PARSER_INCLUDE "dwarfidl/dwarfidlSimpleCParser.h"
-#include <antlr3cxx/parser.hpp>
-
+#include "dwarfidl/lang.hpp"
 #include <dwarfpp/lib.hpp>
 
 namespace dwarfidl

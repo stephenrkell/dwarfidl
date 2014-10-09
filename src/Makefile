@@ -3,7 +3,7 @@ THIS_MAKEFILE := $(realpath $(lastword $(MAKEFILE_LIST)))
 SRC := $(wildcard *.cpp)
 DEPS = $(patsubst %.cpp,.%.d,$(SRC))
 
-LIB_OBJS := cxx_model.o dwarfidl_cxx_target.o dwarf_interface_walk.o create.o 
+LIB_OBJS := cxx_model.o dwarfidl_cxx_target.o dwarf_interface_walk.o create.o lang.o
 
 LDLIBS := -lantlr3c
 LDLIBS += -lcxxgen -ldwarfpp
