@@ -106,6 +106,9 @@ namespace dwarfidl
 					.insert(make_pair(attrnum, v));
 		}
 		
+		if (getenv("DEBUG_CC")) { cerr << "Created DIE: ";
+			created.print_with_attrs(cerr);
+			cerr << endl; }
 		return created;
 	}
 	
@@ -192,7 +195,7 @@ namespace dwarfidl
 			auto created = create_one_die_with_children(parent, n);
 			if (!first_created) first_created = created;
 			
-			if (getenv("DEBUG_CC")) cerr << "Created one DIE and its children; we now have: " << endl << parent.root();
+			// if (getenv("DEBUG_CC")) cerr << "Created one DIE and its children; we now have: " << endl << parent.root();
 		}
 		return first_created;
 	}
@@ -215,7 +218,7 @@ namespace dwarfidl
 
 		iterator_base first_created = create_dies(parent, tree);
 
-		if (getenv("DEBUG_CC")) cerr << "Created some more stuff; whole tree is now: " << endl << parent.get_root();
+		// if (getenv("DEBUG_CC")) cerr << "Created some more stuff; whole tree is now: " << endl << parent.get_root();
 		
 		return first_created;
 	}
