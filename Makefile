@@ -9,7 +9,7 @@ src: parser
 	$(MAKE) -C src
 
 .PHONY: printer
-printer: src
+printer: src lib
 	$(MAKE) -C printer
 
 lib: src
