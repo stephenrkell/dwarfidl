@@ -109,9 +109,9 @@ gather_interface_dies(root_die& root,
 						auto inserted = types.insert(t);
 						if (!inserted.second)
 						{
-							// cerr << "Type was already present: " << *t 
-							// 	<< " (or something equal to it: " << *inserted.first
-							// 	<< ")" << endl;
+							cerr << "Type was already present: " << *t 
+								<< " (or something equal to it: " << *inserted.first
+								<< ")" << endl;
 							// cerr << "Attributes: " << t->copy_attrs(root) << endl;
 							return false; // was already present
 						}
@@ -127,19 +127,7 @@ gather_interface_dies(root_die& root,
 			
 			/* Also output everything that this depends on. We have to case-split
 			 * for now. */
-			if (i_d.base().base().is_a<subprogram_die>())
-			{
-				// make sure we have all the relevant types in our set
-				auto i_subp = i_d.base().base().as_a<subprogram_die>();
-				if (i_subp->find_type()) add_all_types(i_subp->find_type());
-				auto fps = i_subp->children().subseq_of<formal_parameter_die>();
-				for (auto i_fp = std::move(fps.first); i_fp != fps.second; ++i_fp)
-				{
-					auto outer_t = i_fp->find_type();
-					add_all_types(outer_t);
-				}
-			}
-			else if (i_d.base().base().is_a<variable_die>())
+			if (i_d.base().base().is_a<variable_die>())
 			{
 				add_all_types(i_d.base().base().as_a<variable_die>()->get_type());
 			}
