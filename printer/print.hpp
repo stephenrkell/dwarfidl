@@ -97,6 +97,7 @@ print(
 );
 
 /* specializations of the above */
+template<> void print<0>                            (indenting_ostream& out, const iterator_base& i);
 template<> void print<DW_TAG_base_type>             (indenting_ostream& out, const iterator_base& i);
 template<> void print<DW_TAG_compile_unit>          (indenting_ostream& out, const iterator_base& i);
 template<> void print<DW_TAG_subprogram>            (indenting_ostream& out, const iterator_base& i);

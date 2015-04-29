@@ -316,7 +316,15 @@ namespace tool {
 	}
 
 	// explicitly instantiate 0
-	template void print<0>             (indenting_ostream& out, const iterator_base& i);
+	template<> void print<0>             (indenting_ostream& out, const iterator_base& i)
+	{
+		// default_print only works for real DIEs
+		if (i != iterator_base::END && i.offset_here() == 0)
+		{
+			recursively_print_children(out, i);
+		}
+		else abort();
+	}
 	
 	// define specializations here
 	template<> void print<DW_TAG_base_type>             (indenting_ostream& out, const iterator_base& i)
