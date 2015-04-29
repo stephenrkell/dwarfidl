@@ -38,7 +38,7 @@ gen_makefile () {
         echo "CXXFLAGS += -I${basepath}/include"
     done
     for basepath in "$@"; do
-        echo "LDFLAGS += -L${basepath}/lib -Wl,-R${basepath}/lib"
+        echo "LDFLAGS += -L${basepath}/lib -Wl,-rpath,${basepath}/lib"
     done
     echo "include Makefile"
 }
