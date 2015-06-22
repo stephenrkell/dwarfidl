@@ -70,4 +70,5 @@ ANTLR_M4_PATH := $( readlink -f m4ntlr )
 CFLAGS += -I${ANTLR34_PREFIX}
 LDFLAGS += -L${ANTLR34_PREFIX}/lib -Wl,-rpath,${ANTLR34_PREFIX}/lib
 
-include Makefile" > $(dirname $0)/../parser/makefile
+include Makefile" > $(dirname $0)/../parser/makefile && \
+cp $(dirname $0)/../src/makefile $(dirname $0)/../printer/makefile
