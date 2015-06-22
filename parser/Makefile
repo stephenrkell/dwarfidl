@@ -11,7 +11,7 @@ export M4PATH
 
 CFLAGS += -fPIC
 
-default: include/dwarfidlSimpleCParser.h include/dwarfidlSimpleCLexer.h dwarfidlSimpleCParser.o dwarfidlSimpleCLexer.o
+default: include/dwarfidlSimpleCParser.h include/dwarfidlSimpleCLexer.h dwarfidlSimpleCParser.o dwarfidlSimpleCLexer.o dwarfidlSimplyPyParser.py
 
 include $(ANTLR_M4_PATH)/Makerules
 
