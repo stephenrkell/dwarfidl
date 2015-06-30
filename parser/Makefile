@@ -33,7 +33,7 @@ $(GRAMMAR_PATH)/include/%CParser.h: $(GRAMMAR_PATH)/%C.g
 clean::
 	cd $(GRAMMAR_PATH)/ && (rm -f *.h *.o *.a *.d; \
 	rm -f *Parser.c *Lexer.c; \
-	rm -f $(GRAMMAR_BASENAME)/*.tokens; \
+	rm -f $(GRAMMAR_BASENAME).tokens; \
 	rm -rf include; \
 	rm -f test_parser)
 
