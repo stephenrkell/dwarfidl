@@ -27,7 +27,7 @@ fragment SPACE : ' ';
 
 fragment HEX_INT : '0x' HEX_DIGIT+;
 fragment OCTAL_INT : '0' NONZERO_DIGIT DIGIT*;
-fragment UNSIGNED_INT : NONZERO_DIGIT DIGIT* ('U'|'u');
+fragment UNSIGNED_INT : (ZERO | NONZERO_DIGIT DIGIT*) ('U'|'u');
 fragment SIGNED_INT : '-'? NONZERO_DIGIT DIGIT*;
 fragment ZERO : '0';
 
@@ -218,12 +218,10 @@ INT : HEX_INT | OCTAL_INT | UNSIGNED_INT | SIGNED_INT | ZERO;
 boolean_value : KEYWORD_TRUE | KEYWORD_FALSE;
 
 absolute_offset : AT INT
-        //        -> ^(ABSOLUTE_OFFSET INT)
-        -> INT
+                -> ^(ABSOLUTE_OFFSET INT)
     ;
 relative_offset : PLUS INT
-//        -> ^(RELATIVE_OFFSET INT)
-        -> INT
+        -> ^(RELATIVE_OFFSET INT)
     ;
 offset : absolute_offset | relative_offset;
 

@@ -24,42 +24,45 @@ namespace dwarfidl
 		Dwarf_Half attr,
 		const std::map<antlr::tree::Tree *, iterator_base>& nested)
 	{
-		switch (GET_TYPE(d))
-		{
-			case TOKEN(DIE): {
-				/* nested DIE; we should already have created it */
-				auto found = nested.find(d);
-				assert(found != nested.end());
-				
-				return attribute_value(attribute_value::weak_ref(found->second.get_root(), 
+		switch (GET_TYPE(d)) {
+		case TOKEN(DIE): {
+			/* nested DIE; we should already have created it */
+			auto found = nested.find(d);
+			assert(found != nested.end());
+			
+			return attribute_value(attribute_value::weak_ref(found->second.get_root(), 
 					found->second.offset_here(), false, 
 					context.offset_here(), attr));
-			} break;
-			case TOKEN(IDENT): {
-				if (attr != DW_AT_name)
-				{
-					/* unless we're naming something, resolve this ident */
-					std::vector<string> name(1, unescape_ident(CCP(GET_TEXT(d))));
-					auto found = context.root().scoped_resolve(context,
-						name.begin(), name.end());
-					assert(found);
-					return attribute_value(attribute_value::weak_ref(found.get_root(), 
+		} break;
+		case TOKEN(IDENT): {
+			if (attr != DW_AT_name) {
+				/* unless we're naming something, resolve this ident */
+				std::vector<string> name(1, unescape_ident(CCP(GET_TEXT(d))));
+				auto found = context.root().scoped_resolve(context,
+					name.begin(), name.end());
+				assert(found);
+				return attribute_value(attribute_value::weak_ref(found.get_root(), 
 						found.offset_here(), false, 
 						context.offset_here(), attr));
-					assert(found);
-				}
-				else
-				{
-					string name = unescape_ident(CCP(GET_TEXT(d)));
-					return attribute_value(name);
-				}
-			} break;
-			case TOKEN(INT): {
-				return attribute_value(static_cast<Dwarf_Unsigned>(node_text_to<unsigned int>(d)));
-			} break;
-			case TOKEN(STRING_LIT): {
-				assert(false);
-			} break;
+				assert(found);
+			}
+			else {
+				string name = unescape_ident(CCP(GET_TEXT(d)));
+				return attribute_value(name);
+			}
+		} break;
+		case TOKEN(INT): {
+			return attribute_value(static_cast<Dwarf_Unsigned>(node_text_to<unsigned int>(d)));
+		} break;
+		case TOKEN(ABSOLUTE_OFFSET): {
+			INIT;
+			BIND2(d, addr_node);
+			return attribute_value(attribute_value::weak_ref(context.get_root(), node_text_to<unsigned int>(addr_node), true, 0, 0));
+		} break;
+		case TOKEN(STRING_LIT): {
+			string text = string(CCP(GET_TEXT(d)));
+			return attribute_value(text);
+		} break;
 		case TOKEN(KEYWORD_TRUE): {
 			return attribute_value(static_cast<Dwarf_Bool>(1));
 		} break;
@@ -95,7 +98,7 @@ namespace dwarfidl
 			assert(false);
 		}
 	}
-
+	
 	iterator_base create_one_die(const iterator_base& parent, antlr::tree::Tree *d,
 		const std::map<antlr::tree::Tree *, iterator_base>& nested /* = ... */)
 	{
@@ -165,7 +168,7 @@ namespace dwarfidl
 				INIT;
 				BIND2(n, attr);
 				BIND2(n, value);
-
+				
 				switch (GET_TYPE(value))
 				{
 					case TOKEN(DIE): {
@@ -217,7 +220,7 @@ namespace dwarfidl
 	}
 
 	iterator_base create_dies(antlr::tree::Tree *ast) {
-		root_die *root = new root_die;
+		in_memory_root_die *root = new in_memory_root_die;
 		auto iter = root->begin();
 		create_dies(iter, ast);
 		return iter;
@@ -253,15 +256,6 @@ namespace dwarfidl
 			}
 			if (getenv("DEBUG_CC")) cerr << "Created one DIE and its children; we now have: " << endl << parent.root();
 		}
-
-		
-		
-		// non_compile_unit_dies is now populated
-		// for (auto iter = non_compile_unit_dies.begin(); iter != non_compile_unit_dies.end(); iter++) {
-		// 	auto created = create_one_die_with_children(dummy_cu, *iter);
-		// 	if (!first_created) first_created = created;
-		// }
-
 		
 		return first_created;
 	}

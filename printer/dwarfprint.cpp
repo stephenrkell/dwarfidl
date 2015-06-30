@@ -111,6 +111,9 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 	auto name_ptr = die_iter.name_here();
 	auto tag = string(DEFAULT_DWARF_SPEC.tag_lookup(die_iter.tag_here())); 
 	if (tag.compare("(unknown tag)") == 0) {
+		// FIXME FIXME FIXME
+		if (die_iter.tag_here() != 0) // root
+			return;
 		// Leave unknown tags as hex
 		tag = to_hex(die_iter.tag_here());
 	} else {
@@ -137,15 +140,44 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 	}
 	
 	auto attrs = die_iter.copy_attrs(die_iter.get_root());
-	
+	auto &root = die_iter.get_root();
 	auto with_type_iter = die_iter.as_a<with_type_describing_layout_die>();
 	if (with_type_iter) {
-		auto type_die = with_type_iter->get_type(die_iter.get_root());
-		if (type_die) {
-			auto type_name = type_die->get_name();
+		auto type_die = with_type_iter->get_type(root);
+		auto abstract_name = type_die.name_here();
+		if (type_die && abstract_name) {
+			auto concrete_die = type_die->get_concrete_type(root);
+			auto concrete_name = concrete_die.name_here();
+			auto type_name = (concrete_name ? concrete_name : abstract_name);
 			if (type_name) {
 				s << " : " << *type_name;
 				type_printed = true;
+
+				cerr << "Printing type name for ";
+				if (name_ptr) {
+					cerr << "'" << *name_ptr << "'";
+				} else if (offset) {
+					cerr << "@0x" << to_hex(offset);
+				} else {
+					cerr << "<some anonymous DIE>";
+				}
+				cerr << ": abstract type name";
+				if (type_die->get_name()) {
+					cerr << " = '" << *(type_die->get_name()) << "'";
+				} else {
+					cerr << " is unknown";
+				}
+				if (concrete_die) {
+					cerr << ", concrete type name";
+					if (concrete_die->get_name()) {
+						cerr << " = '" << *(concrete_die->get_name()) << "'";
+					} else {
+						cerr << " is unknown";
+					}
+				} else {
+					cerr << ", no concrete type found";
+				}
+				cerr << "." << endl;
 			}
 		}
 	}
@@ -171,17 +203,20 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 	if (attrs.size() > 0) {
 		s << " [";
 		s.inc_level();
+		unsigned int attrs_printed = 0;
 		for (auto iter = attrs.begin(); iter != attrs.end(); iter++) {
 			auto pair = *iter;
 			auto k = string(DEFAULT_DWARF_SPEC.attr_lookup(pair.first));
 			if (k.compare("(unknown attribute)") == 0) {
+				// FIXME FIXME FIXME
+				continue;
 				/* Leave unknown attributes as hex */
 				k = to_hex(pair.first);
 			} else {
 				k = k.substr(6, string::npos); // remove DW_AT_
 			}
 			auto v = pair.second;
-			if (iter != attrs.begin()) {
+			if (attrs_printed++ != 0) {
 				s << "," << endl;
 			}
 			s << k << " = ";
@@ -204,10 +239,10 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 			}
 				break;
 			case attribute_value::UNSIGNED:
-				s << v.get_unsigned() << "u";
+				s << to_dec(v.get_unsigned()) << "u";
 				break;
 			case attribute_value::SIGNED:
-				s << v.get_signed();
+				s << to_dec(v.get_signed());
 				break;
 			case attribute_value::ADDR:
 				s << to_hex(v.get_address());
@@ -253,15 +288,28 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 
 	/* Children list (recursively) */
 
-
-	auto children = die_iter.children_here();
-
+	// auto lambda = [] (iterator_base &iter) {
+	// 	return (iter.is_a<compile_unit_die>() || iter.is_a<member_die>() || iter.is_a<formal_parameter_die>() || iter.is_a<subprogram_die>() || iter.is_a<root_die>());
+	// };
+	auto children = die_iter.children_here(); //.subseq_with<decltype(lambda)>(lambda);
+	
 	if (children.first != children.second) {
 		s << " {";
 		s.inc_level();
 		for (auto iter = children.first; iter != children.second; iter++) {
-			print_type_die(s, iter.base());
-			s << endl;
+			switch (iter.tag_here()) {
+				// Only print these tags
+			case DW_TAG_compile_unit:
+			case DW_TAG_member:
+			case DW_TAG_formal_parameter:
+			case DW_TAG_subprogram:
+			case 0: // root
+				print_type_die(s, iter.base());
+				s << endl;
+				break; // definitely
+			default:    // not 
+				continue; // confusing
+			}
 		}
 		s.dec_level();
 		s << "}";
