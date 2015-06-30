@@ -1,41 +1,45 @@
-GRAMMAR_BASENAME ?= dwarfidlSimple
+-include config.mk
+
+GRAMMAR_BASENAME ?= dwarfidlSimpleC
 GRAMMAR_TOPLEVEL ?= toplevel
 GRAMMAR_OPTIONS ?= output=AST
 GRAMMAR_PATH ?= .
 
 LIBDWARFPP_PATH ?= ../../libdwarfpp.hg
 ANTLR_M4_PATH ?= ../../antlr-m4
-M4PATH := $(ANTLR_M4_PATH):$(dir $(THIS_MAKEFILE)):$(M4_PATH)
-$(warning M4PATH is $(M4PATH))
-export M4PATH
-
 CFLAGS += -fPIC
 
-default: include/dwarfidlSimpleCParser.h include/dwarfidlSimpleCLexer.h dwarfidlSimpleCParser.o dwarfidlSimpleCLexer.o dwarfidlSimplyPyParser.py
+default: dwarfidlSimpleCParser.o dwarfidlSimpleCLexer.o test_parser
 
-include $(ANTLR_M4_PATH)/Makerules
+THIS_MAKEFILE := $(lastword $(MAKEFILE_LIST))
+
+ANTLR ?= java -classpath .:$(CLASSPATH) org.antlr.Tool
+
+CFLAGS += -I$(GRAMMAR_PATH)/include
+
+$(GRAMMAR_PATH)/%CLexer.c \
+$(GRAMMAR_PATH)/%CParser.c \
+$(GRAMMAR_PATH)/include/%CLexer.h \
+$(GRAMMAR_PATH)/include/%CParser.h: $(GRAMMAR_PATH)/%C.g 
+	$(ANTLR) "$<"
+	mkdir -p $(GRAMMAR_PATH)/include && \
+	mv \
+		$(GRAMMAR_PATH)/$*CLexer.h $(GRAMMAR_PATH)/$*CParser.h \
+		$(GRAMMAR_PATH)/include/
+
+%.o: %.c
+	$(CC) $(CFLAGS) -o "$@" -c "$<"
+
+clean::
+	cd $(GRAMMAR_PATH)/ && (rm -f *.h *.o *.a *.d; \
+	rm -f *Parser.c *Lexer.c; \
+	rm -f $(GRAMMAR_BASENAME).tokens; \
+	rm -rf include; \
+	rm -f test_parser)
+
+LDLIBS += -L/home/ojno/antlr3.5/runtime/C/.libs -lantlr3c
+
+test_parser: test_parser.o dwarfidlSimpleCParser.o dwarfidlSimpleCLexer.o
+	$(CXX) -o "$@" "$<" $(LDFLAGS) -L. $(LDLIBS) dwarfidlSimpleCParser.o dwarfidlSimpleCLexer.o
 
 
-#test:: test-samples
-#
-#.PHONY: test-samples
-#test-samples: dwarfidlPyParser.py 
-#	for fname in samples/test.dwarfidl ; do \
-#		python dwarfidlPyParser.py --rule=toplevel < "$$fname"; \
-#	done | $(ANTLR_M4_PATH)/parens-filter.sh
-#
-#.PHONY: test-lexer-samples
-#test-lexer-samples: dwarfidlPyLexer.py # samples/ephy.cake samples/xcl.cake
-#	for fname in samples/test.dwarfidl ; do \
-#		python dwarfidlPyLexer.py < "$$fname"; \
-#	done 
-
-dwarfidlSimple.g: dwarfidl-tag-keywords-dwarf3.inc dwarfidl-attr-keywords-dwarf3.inc
-
-dwarfidl-tag-keywords-%.inc: $(LIBDWARFPP_PATH)/spec/%.py
-	/bin/echo -e "for tag in tag_map.keys():\n\tprint tag\n\n" | python -i "$<" /dev/stdin | \
-sed "s/.*/| '&'/" > "$@" || (rm -f "$@"; false)
-
-dwarfidl-attr-keywords-%.inc: $(LIBDWARFPP_PATH)/spec/%.py
-	/bin/echo -e "for attr in attr_type_map.keys():\n\tprint attr\n\n" | python -i "$<" /dev/stdin | \
-sed "s/.*/| '&'/" > "$@" || (rm -f "$@"; false)
