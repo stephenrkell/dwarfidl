@@ -1,1 +1,0 @@
-structure_type { member : baz; member : (array_type [type = blah] {}); };
