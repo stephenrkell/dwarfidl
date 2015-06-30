@@ -9,7 +9,8 @@ namespace dwarfidl
 {
 	using namespace dwarf;
 	using namespace dwarf::core;
-	
+
+	iterator_base create_dies(antlr::tree::Tree *ast);
 	iterator_base create_dies(const iterator_base& parent, antlr::tree::Tree *ast);
 	iterator_base create_dies(const iterator_base& parent, const string& some_dwarfidl);
 	iterator_base create_one_die(const iterator_base& parent, antlr::tree::Tree *ast, 
