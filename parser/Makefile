@@ -1,3 +1,5 @@
+-include config.mk
+
 GRAMMAR_BASENAME ?= dwarfidlSimple
 GRAMMAR_TOPLEVEL ?= toplevel
 GRAMMAR_OPTIONS ?= output=AST
@@ -11,9 +13,15 @@ export M4PATH
 
 CFLAGS += -fPIC
 
-default: include/dwarfidlSimpleCParser.h include/dwarfidlSimpleCLexer.h dwarfidlSimpleCParser.o dwarfidlSimpleCLexer.o dwarfidlSimplyPyParser.py
+default: include/dwarfidlSimpleCParser.h include/dwarfidlSimpleCLexer.h dwarfidlSimpleCParser.o dwarfidlSimpleCLexer.o test_parser
 
 include $(ANTLR_M4_PATH)/Makerules
+
+LDLIBS += -L/home/ojno/antlr3.5/runtime/C/.libs -lantlr3c
+
+test_parser: test_parser.o dwarfidlSimpleCParser.o dwarfidlSimpleCLexer.o
+	$(CXX) -o "$@" "$<" $(LDFLAGS) -L. $(LDLIBS) dwarfidlSimpleCParser.o dwarfidlSimpleCLexer.o
+
 
 
 #test:: test-samples
