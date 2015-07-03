@@ -1,0 +1,15 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+pkgincludedir=${includedir}/@PACKAGE@
+pkglibdir=@pkglibdir@
+datarootdir=@datarootdir@
+datadir=@datadir@
+
+Name: dwarfidl
+Description: Language, library and tools for DWARF-described interfaces 
+Version: 0.1
+Requires: libsrk31cxx libcxxfileno libdwarfpp libcxxgen libantlr3cxx
+Cflags: -I${includedir}
+Libs: -L${libdir} -ldwarfidl
