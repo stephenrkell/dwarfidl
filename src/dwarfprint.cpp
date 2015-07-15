@@ -290,6 +290,22 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 			} else {
 				k = k.substr(6, string::npos); // remove DW_AT_
 			}
+
+			char *drop_attrs[] = {
+				 "decl_file",
+				 "decl_line",
+				 "prototyped",
+				 "external",
+				 "sibling",
+				 nullptr
+			};
+
+			for (unsigned int i = 0; drop_attrs[i] != nullptr; i++) {
+				 if (k.compare(drop_attrs[i]) == 0) {
+					  continue;
+				 }
+			}
+			
 			auto v = pair.second;
 			if (attrs_printed++ != 0) {
 				s << "," << endl;
@@ -372,6 +388,9 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 		s << " {";
 		s.inc_level();
 		for (auto iter = children.first; iter != children.second; iter++) {
+			 // user tags
+			 if (iter.tag_here() > 0x4000) continue;
+			 
 			switch (iter.tag_here()) {
 				// Only print these tags
 			case DW_TAG_compile_unit:
@@ -381,13 +400,17 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 			case 0: // root
 				 print_type_die(s, iter.base(), types);
 				s << endl;
-				break; // definitely
-			default:    // not
+				break;
+			case DW_TAG_inlined_subroutine:
+			case DW_TAG_lexical_block:
+			case DW_TAG_variable:
+				 // Specifically skip some.
+				 continue; // definitely
+				 break; // not confusing
+			default:
 				 print_type_die(s, iter.base(), types);
 				 s << endl;
 				 break;
-				 
-				 //	continue; // confusing
 			}
 		}
 		s.dec_level();
