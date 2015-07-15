@@ -36,11 +36,23 @@ public:
 };
 	 
 
-template <typename T> inline T node_text_to(antlr::tree::Tree *node) {
-	std::istringstream is(CCP(GET_TEXT(node)));
-	T result;
-	is >> result;
-	return result;
+template <typename T> inline T node_text_to(Tree *node) {
+	 // FIXME, brittle hex detection etc?
+	 
+	 string text = CCP(GET_TEXT(node));
+	 bool is_hex = (text.substr(0, 2).compare(string("0x")) == 0);
+	 if (is_hex) {
+		  text = text.substr(2, string::npos);
+	 }
+	 std::istringstream is(text);
+	 if (is_hex) {
+		  is >> std::hex;
+	 } else {
+		  is >> std::dec;
+	 }
+	 T result;
+	 is >> result;
+	 return result;
 }
 
 namespace dwarfidl
@@ -94,7 +106,9 @@ namespace dwarfidl
 		case TOKEN(ABSOLUTE_OFFSET): {
 			INIT;
 			BIND2(d, addr_node);
-			return attribute_value(attribute_value::weak_ref(context.get_root(), node_text_to<unsigned int>(addr_node), true, 0, 0));
+			unsigned int off = node_text_to<unsigned int>(addr_node);
+			assert(off != 0);
+			return attribute_value(attribute_value::weak_ref(context.get_root(), off, true, context.offset_here(), attr));
 		} break;
 		case TOKEN(STRING_LIT): {
 			string text = string(CCP(GET_TEXT(d)));
