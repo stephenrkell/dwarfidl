@@ -4,6 +4,7 @@ grammar dwarfidlSimpleC;
 options {
     language=C;
     output=AST;
+    backtrack=true;
 }
 
 tokens {
@@ -399,12 +400,29 @@ unary_expression
 	| KEYWORD_SIZEOF OPEN expression CLOSE -> ^(FP_SIZEOF expression)
 	;
 
+// postfix_expression
+// 	:   (primary_expression->primary_expression)
+//         (   '[' a=expression (RANGE b=expression -> ^(FP_SUBSCRIPT FP_DEREFSIZES $postfix_expression $a $b))? ']' -> ^(FP_SUBSCRIPT FP_DEREFSIZES $postfix_expression $a)
+// 		|   '{' a=expression (RANGE b=expression -> ^(FP_SUBSCRIPT FP_DIRECTBYTES $postfix_expression $a $b))? '}' -> ^(FP_SUBSCRIPT FP_DIRECTBYTES $postfix_expression $a)
+// 		|   '[{' a=expression (RANGE b=expression -> ^(FP_SUBSCRIPT FP_DEREFBYTES $postfix_expression $a $b))? '}]' -> ^(FP_SUBSCRIPT FP_DEREFBYTES $postfix_expression $a)
+//         |   '.' identifier -> ^(FP_MEMBER $postfix_expression identifier)
+//         )*
+// 	;
+
 postfix_expression
 	:   (primary_expression->primary_expression)
-        (   '[' expression (RANGE expression)? ']' -> ^(FP_SUBSCRIPT $postfix_expression expression+)
+        (   '[' a=subscript_range ']' -> ^(FP_SUBSCRIPT FP_DEREFSIZES $postfix_expression $a)
+		|   '{' a=subscript_range '}' -> ^(FP_SUBSCRIPT FP_DIRECTBYTES $postfix_expression $a)
+		|   '[{' a=subscript_range '}]' -> ^(FP_SUBSCRIPT FP_DEREFBYTES $postfix_expression $a)
         |   '.' identifier -> ^(FP_MEMBER $postfix_expression identifier)
         )*
 	;
+
+// needs backtrack enabled
+subscript_range
+    : (expression RANGE expression -> ^(SUBSCRIPT_RANGE expression expression))
+    |(expression -> ^(SUBSCRIPT_SCALAR expression))
+;
 
 primary_expression
 	: identifier
