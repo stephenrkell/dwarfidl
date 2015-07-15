@@ -1,3 +1,16 @@
+/src/dwarf-ocaml-ctypesgen
+/src/dwarfhpp
+/src/dwarfidldump
+/src/test_create
+/src/test_dwarfprint
+/src/test_parser
+/parser/test_parser
+/parser/dwarfidlSimpleCParser.c
+/parser/dwarfidlSimpleCLexer.c
+/parser/dwarfidlSimpleCParser.h
+/parser/dwarfidlSimpleCLexer.h
+/dwarfidlSimpleC.tokens
+
 /Makefile
 
 __pycache__/
