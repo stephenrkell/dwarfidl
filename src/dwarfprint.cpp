@@ -106,14 +106,21 @@ string opcode_to_string(Dwarf_Loc expr) {
 void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_iter) {
 	if (!die_iter) return;
 	
+	// Special case root early: just print all children
+	if (die_iter.tag_here() == 0) {
+		auto children = die_iter.children_here();
+		for (auto iter = children.first; iter != children.second; iter++) {
+			 print_type_die(_s, iter.base(), types);
+			_s << endl;
+		}
+		return;
+	}
+	
 	srk31::indenting_newline_ostream s(_s);
 	//	auto &die = *die_iter;
 	auto name_ptr = die_iter.name_here();
 	auto tag = string(DEFAULT_DWARF_SPEC.tag_lookup(die_iter.tag_here())); 
 	if (tag.compare("(unknown tag)") == 0) {
-		// FIXME FIXME FIXME
-		if (die_iter.tag_here() != 0) // root
-			return;
 		// Leave unknown tags as hex
 		tag = to_hex(die_iter.tag_here());
 	} else {
