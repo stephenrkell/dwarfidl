@@ -21,7 +21,8 @@ src_libdwarfidl_la_CXXFLAGS = $(AM_CXXFLAGS)
 PARSER_OBJS = parser/dwarfidlSimpleCLexer.o parser/dwarfidlSimpleCParser.o
 
 
-noinst_PROGRAMS = parser/test_parser src/dwarfidldump src/test_dwarfprint src/dwarfhpp src/dwarf-ocaml-ctypesgen src/test_create
+noinst_PROGRAMS = parser/test_parser src/test_dwarfprint src/test_create
+bin_PROGRAMS = src/dwarfidldump src/dwarfhpp src/dwarf-ocaml-ctypesgen
 
 parser_test_parser_SOURCES = parser/test_parser.c parser/dwarfidlSimpleCLexer.c parser/dwarfidlSimpleCParser.c
 parser_test_parser_LDADD = -lantlr3c 
