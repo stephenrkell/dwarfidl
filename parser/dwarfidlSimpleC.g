@@ -22,38 +22,41 @@ tokens {
     IDENTS;
 
     FP_DIRECTBYTES;
-    FP_DEREFSIZE;
+    FP_DEREFSIZES;
     FP_DEREFBYTES;
-    FP_FOR;
-    FP_IF;
-    FP_GT;
-    FP_LT;
-    FP_GTE;
-    FP_LTE;
-    FP_EQ;
-    FP_NE;
-    FP_AND;
-    FP_OR;
-    FP_NOT;
-    FP_ADD;
-    FP_SUB;
-    FP_MUL;
-    FP_DIV;
-    FP_MOD;
-	FP_NEG;
-    FP_SHL;
-    FP_SHR;
-    FP_BITAND;
-    FP_BITOR;
-    FP_BITXOR;
-    FP_BITNOT;
-    FP_MEMBER;
+    FP_UNION;
+    FP_FOR; // for_loop
+    FP_IF; // if_cond
+    FP_GT; // binary
+    FP_LT; // bin
+    FP_GTE; // bin
+    FP_LTE; // bin
+    FP_EQ; // bin
+    FP_NE; // bin
+    FP_AND; // bin
+    FP_OR; // bin
+    FP_NOT; // unary
+    FP_ADD; // bin
+    FP_SUB; // bin
+    FP_MUL; // bin
+    FP_DIV; // bin
+    FP_MOD; // bin
+	FP_NEG; // unary
+    FP_SHL; // bin
+    FP_SHR; // bin
+    FP_BITAND; // bin
+    FP_BITOR; // bin
+    FP_BITXOR; // bin
+    FP_BITNOT; // bin
+    FP_MEMBER; // bin
     FP_CLAUSES;
     FP_CLAUSE;
     FP_SUBSCRIPT;
-	FP_TRUE;
-	FP_FALSE;
-    FP_SIZEOF;
+	FP_TRUE; // const
+	FP_FALSE; // const
+    FP_SIZEOF; // unary
+	SUBSCRIPT_SCALAR;
+	SUBSCRIPT_RANGE;
 }
 
 fragment ALPHA : ('A'..'Z'|'a'..'z');
