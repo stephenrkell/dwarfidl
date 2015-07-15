@@ -103,6 +103,61 @@ string opcode_to_string(Dwarf_Loc expr) {
 	return ss.str();
 }
 
+static inline void _debug_print_dedup(iterator_df<dwarf::core::type_die> type_die, iterator_df<dwarf::core::type_die> dedup_type_iter) {
+	 cerr << "Searching type set for";
+	 if (type_die.name_here()) {
+		  cerr << " '" << *type_die.name_here() << "'";
+	 }
+	 if (type_die.offset_here()) {
+		  cerr << " @" << to_hex(type_die.offset_here());
+	 }
+	 if (!type_die.name_here() && !type_die.offset_here()) {
+		  cerr << " <some anonymous DIE>";
+	 }
+	 cerr << ", got";
+	 if (dedup_type_iter.name_here()) {
+		  cerr << " '" << *dedup_type_iter.name_here() << "'";
+	 }
+	 if (dedup_type_iter.offset_here()) {
+		  cerr << " @" << to_hex(dedup_type_iter.offset_here());
+	 }
+	 if (!dedup_type_iter.name_here() && !dedup_type_iter.offset_here()) {
+		  cerr << " <some anonymous DIE>";
+	 }
+	 cerr << "." << endl;
+}
+
+static inline void _debug_print_print(optional<string> name_ptr, Dwarf_Off offset, iterator_df<dwarf::core::type_die> type_die, iterator_df<dwarf::core::type_die> concrete_die) {
+	 cerr << "Printing type name for ";
+	 if (name_ptr) {
+		  cerr << "'" << *name_ptr << "'";
+	 } else if (offset) {
+		  cerr << "@0x" << to_hex(offset);
+	 } else {
+		  cerr << "<some anonymous DIE>";
+	 }
+	 cerr << ": abstract type name";
+	 if (type_die->get_name()) {
+		  cerr << " = '" << *(type_die->get_name()) << "'";
+	 } else {
+		  cerr << " is unknown";
+	 }
+	 if (concrete_die) {
+		  cerr << ", concrete type name";
+		  if (concrete_die->get_name()) {
+			   cerr << " = '" << *(concrete_die->get_name()) << "'";
+		  } else {
+			   cerr << " is unknown";
+		  }
+	 } else {
+		  cerr << ", no concrete type found";
+	 }
+	 cerr << "." << endl;
+
+}
+
+
+
 void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_iter) {
 	if (!die_iter) return;
 	
@@ -148,61 +203,74 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 	
 	auto attrs = die_iter.copy_attrs(die_iter.get_root());
 	auto &root = die_iter.get_root();
+
+	/* Convert the type offset into a name if possible. */
+	/* Two types (ha) of die with type information:
+	   with_type_describing_layout_die => variables, members, etc, things *with* a type
+	   type_describing_subprogram_die => subprograms (functions etc) *returning* a thing with a type
+	   type_chain_die => things which are types with a type, e.g. typedefs, pointers, arrays
+	   (yes, you're right, I can't count)
+	*/
+	dwarf::core::iterator_df<dwarf::core::type_die> type_die;
 	auto with_type_iter = die_iter.as_a<with_type_describing_layout_die>();
-	if (with_type_iter) {
-		auto type_die = with_type_iter->get_type(root);
-		auto abstract_name = type_die.name_here();
-		if (type_die && abstract_name) {
-			auto concrete_die = type_die->get_concrete_type(root);
-			auto concrete_name = concrete_die.name_here();
-			auto type_name = (concrete_name ? concrete_name : abstract_name);
-			if (type_name) {
-				s << " : " << *type_name;
-				type_printed = true;
-
-				cerr << "Printing type name for ";
-				if (name_ptr) {
-					cerr << "'" << *name_ptr << "'";
-				} else if (offset) {
-					cerr << "@0x" << to_hex(offset);
-				} else {
-					cerr << "<some anonymous DIE>";
-				}
-				cerr << ": abstract type name";
-				if (type_die->get_name()) {
-					cerr << " = '" << *(type_die->get_name()) << "'";
-				} else {
-					cerr << " is unknown";
-				}
-				if (concrete_die) {
-					cerr << ", concrete type name";
-					if (concrete_die->get_name()) {
-						cerr << " = '" << *(concrete_die->get_name()) << "'";
-					} else {
-						cerr << " is unknown";
-					}
-				} else {
-					cerr << ", no concrete type found";
-				}
-				cerr << "." << endl;
-			}
-		}
+	auto returning_type_iter = die_iter.as_a<type_describing_subprogram_die>();
+	auto type_chain_iter = die_iter.as_a<type_chain_die>();
+	if (with_type_iter) type_die = with_type_iter->get_type();
+	else if (returning_type_iter) type_die = returning_type_iter->get_type();
+	else if (type_chain_iter) type_die = type_chain_iter->get_type();
+	
+	if (type_die) {
+		 // Dedup
+		 if (types) {
+			  auto dedup_type_iter = types->find(type_die);
+			  //assert(dedup_type_iter != types->end());
+			  if (dedup_type_iter != types->end()) {
+				   _debug_print_dedup(type_die, *dedup_type_iter);
+				   type_die = *dedup_type_iter;
+			  }
+		 }
+		 auto abstract_name = type_die.name_here();
+		 // Concretify (traverse typedefs etc)
+		 auto concrete_die = type_die->get_concrete_type(root);
+		 // Also dedup that. Just in case.
+		 if (concrete_die && types) {
+			  auto concrete_die_iter = types->find(concrete_die);
+			  //assert(concrete_die_iter != types->end());
+			  if (concrete_die_iter != types->end()) {
+				   _debug_print_dedup(concrete_die, *concrete_die_iter);
+				   concrete_die = *concrete_die_iter;
+			  }
+		 }
+		 auto concrete_name = concrete_die.name_here();
+		 auto type_name = (concrete_name ? concrete_name : abstract_name);
+		 if (type_name) {
+			  _debug_print_print(name_ptr, offset, type_die, concrete_die);
+			  s << " : " << *type_name;
+		 } else {
+			  auto type_offset = (concrete_die ? concrete_die.offset_here() : type_die.offset_here());
+			  s << " : @" << to_hex(type_offset);
+			  
+			  if (types->find(type_die) == types->end() && types->find(concrete_die) == types->end()) {
+				   cerr << endl << "WARNING: a type was called for that wasn't in types!" << endl << "abstract: ";
+				   type_die.print_with_attrs(cerr, 0);
+				   cerr << endl << "concrete: ";
+				   concrete_die.print_with_attrs(cerr, 0);
+				   cerr << endl << "context: ";
+				   die_iter.print_with_attrs(cerr, 0);
+				   cerr << endl << endl;
+			  }
+			  type_printed = true;
+		 }
+		 
+	} else {
+		 try {
+			  auto &v = attrs.at(DW_AT_type);
+			  auto ref = v.get_ref();
+			  s << " : " << (ref.abs ? "@" : "+") << to_hex(ref.off);
+			  type_printed = true;
+		 } catch (std::out_of_range) {}
 	}
-	if (!type_printed) {
-		try {
-			auto &v = attrs.at(DW_AT_type);
-			auto ref = v.get_ref();
-			s << " : ";
-			if (ref.abs) {
-				s << "@";
-			} else {
-				s << "+";
-			}
-			s << to_hex(ref.off);
-			type_printed = true;
-		} catch (std::out_of_range) {}
-	}
-
+	
 	/* Attribute list */
 
 	if (name_printed) attrs.erase(DW_AT_name);
