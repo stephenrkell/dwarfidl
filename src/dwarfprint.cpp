@@ -158,7 +158,7 @@ static inline void _debug_print_print(optional<string> name_ptr, Dwarf_Off offse
 
 
 
-void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_iter) {
+void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_iter, optional<type_set&> types) {
 	if (!die_iter) return;
 	
 	// Special case root early: just print all children
@@ -379,66 +379,38 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 			case DW_TAG_formal_parameter:
 			case DW_TAG_subprogram:
 			case 0: // root
-				print_type_die(s, iter.base());
+				 print_type_die(s, iter.base(), types);
 				s << endl;
 				break; // definitely
-			default:    // not 
-				continue; // confusing
+			default:    // not
+				 print_type_die(s, iter.base(), types);
+				 s << endl;
+				 break;
+				 
+				 //	continue; // confusing
 			}
 		}
 		s.dec_level();
 		s << "}";
 	}
 	
-	// auto member_children = die_iter.children_here().subseq_of<member_die>();
-	// auto param_children = die_iter.children_here().subseq_of<formal_parameter_die>();
-	// auto member_children_begin = member_children.first;
-	// auto member_children_end = member_children.second;
-	// auto param_children_begin = param_children.first;
-	// auto param_children_end = param_children.second;
-
-	// auto children = die_iter.children_here().subseq_with<[iterator_base &iter] {
-	// 	return (iter->is_a<compile_unit_die>() || iter->is_a<member_die>() || iter->is_a<formal_parameter_die>() || iter->is_a<subprogram_die>() || iter->is_a<root_die>());
-	// }>();
-
-	//	bool has_children = member_children_begin != member_children_end || param_children_begin != param_children_end;
-	
-	// if (has_children) {
-	// 	s << " {";
-	// 	s.inc_level();
-	// }
-	
-	// for (auto iter = param_children_begin; iter != param_children_end; iter++) {
-	// 	print_type_die(s, iter.base().base());
-	// 	s << endl;
-	// }
-	
-	// for (auto iter = member_children_begin; iter != member_children_end; iter++) {
-	// 	print_type_die(s, iter.base().base());
-	// 	s << endl;
-	// }
-	
-	// if (has_children) {
-	// 	s.dec_level();
-	// 	s << "}";
-	// }
 	s << ";";
 }
 
-string dies_to_idl(set<iterator_base> dies) {
+string dies_to_idl(set<iterator_base> dies, optional<type_set&> types) {
 	ostringstream ss;
 	ss.clear();
 	for (auto iter = dies.begin(); iter != dies.end(); iter++) {
-		print_type_die(ss, *iter);
+		 print_type_die(ss, *iter, types);
 		ss << endl << endl;
 	}
 	return ss.str();
 }
 
-void print_dies(ostream &s, set<iterator_base> dies) {
+void print_dies(ostream &s, set<iterator_base> dies, optional<type_set&> types) {
 	for (auto iter = dies.begin(); iter != dies.end(); iter++) {
-		print_type_die(s, *iter);
-		s << endl << endl;
+		 print_type_die(s, *iter, types);
+		 s << endl << endl;
 	}
 }
 

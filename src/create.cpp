@@ -362,7 +362,7 @@ namespace dwarfidl
 		return first_created;
 	}
 	
-	iterator_base create_dies(const iterator_base& parent, const string& some_dwarfidl)
+	iterator_base create_dies(iterator_base& parent, const string& some_dwarfidl)
 	{
 		
 		/* Also open a dwarfidl file, read some DIE definitions from it. */

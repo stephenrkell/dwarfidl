@@ -42,7 +42,9 @@ int main(int argc, char **argv)
 	iterator_base iter = create_dies(tree);
 
 	set<iterator_base> die_set;
+	
 	die_set.insert(iter);
+
 	print_dies(cout, die_set);
 	
 	return 0;

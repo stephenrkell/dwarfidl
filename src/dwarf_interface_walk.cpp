@@ -95,6 +95,15 @@ gather_interface_dies(root_die& root,
 			
 			/* utility that will come in handy */
 			auto add_all_types = [&types, &root](iterator_df<type_die> outer_t) {
+				 if (outer_t && outer_t.offset_here() == 0x5ae519e) {
+					  cerr << "found the thing." << endl;
+				 }
+
+				 if (outer_t) {
+					  cerr << "add_all_types processing offset 0x" << std::hex <<  outer_t.offset_here() << std::dec << ": " << outer_t.summary() << endl;
+					  
+				 }
+				 
 				walk_type(outer_t, iterator_base::END, 
 					[&types, &root](iterator_df<type_die> t, iterator_df<program_element_die> reason) -> bool {
 						if (!t) return false; // void case

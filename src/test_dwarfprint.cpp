@@ -74,7 +74,7 @@ int main(int argc, char **argv)
 			return result;
 		});
 	
-	print_dies(cout, dies);
+	print_dies(cout, dies, types);
 	
 	return 0;
 }

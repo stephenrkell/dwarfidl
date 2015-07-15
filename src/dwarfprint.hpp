@@ -29,5 +29,6 @@
 #include <dwarfidl/dwarf_interface_walk.hpp>
 
 std::string dies_to_idl(std::set<dwarf::core::iterator_base> dies);
-void print_dies(std::ostream &s, std::set<dwarf::core::iterator_base> dies);
+void print_type_die(std::ostream &_s, dwarf::core::iterator_df<dwarf::core::basic_die> die_iter, boost::optional<dwarf::core::type_set&> types = boost::optional<dwarf::core::type_set&>());
+void print_dies(std::ostream &s, std::set<dwarf::core::iterator_base> dies, boost::optional<dwarf::core::type_set&> types = boost::optional<dwarf::core::type_set&>());
 
