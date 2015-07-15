@@ -34,10 +34,19 @@ namespace dwarfidl
 					found->second.offset_here(), false, 
 					context.offset_here(), attr));
 		} break;
-		case TOKEN(IDENT): {
+		case TOKEN(IDENTS): {
+			ostringstream os;
+			bool first = true;
+			FOR_ALL_CHILDREN(d) {
+				if (first) first = false;
+				else os << " ";
+				os << CCP(GET_TEXT(n));
+			}
+			string identifier = os.str();
+			
 			if (attr != DW_AT_name) {
 				/* unless we're naming something, resolve this ident */
-				std::vector<string> name(1, unescape_ident(CCP(GET_TEXT(d))));
+				std::vector<string> name(1, identifier);//unescape_ident(CCP(GET_TEXT(d))));
 				auto found = context.root().scoped_resolve(context,
 					name.begin(), name.end());
 				assert(found);
@@ -47,8 +56,8 @@ namespace dwarfidl
 				assert(found);
 			}
 			else {
-				string name = unescape_ident(CCP(GET_TEXT(d)));
-				return attribute_value(name);
+				//string name = unescape_ident(CCP(GET_TEXT(d)));
+				return attribute_value(identifier);
 			}
 		} break;
 		case TOKEN(INT): {

@@ -17,6 +17,7 @@ tokens {
     ABSOLUTE_OFFSET;
     OPCODE;
     OPCODE_LIST;
+    IDENTS;
 }
 
 fragment ALPHA : ('A'..'Z'|'a'..'z');
@@ -226,7 +227,10 @@ relative_offset : PLUS INT
 offset : absolute_offset | relative_offset;
 
 // Explicitly support keywords in identifiers
-identifier : (IDENT | KEYWORD_ATTR | NAME | TYPE | KEYWORD_TAG | KEYWORD_TRUE | KEYWORD_FALSE)+;
+identifier : (i+=IDENT | i+=KEYWORD_ATTR | i+=NAME | i+=TYPE | i+=KEYWORD_TAG | i+=KEYWORD_TRUE | i+=KEYWORD_FALSE)+
+        -> ^(IDENTS $i+)
+    ;
+
 //identifier : IDENT;
 
 loc_opcode : IDENT (OPEN INT (COMMA INT)? CLOSE)? SEMICOLON
@@ -248,8 +252,8 @@ die_name: identifier -> ^(ATTR NAME identifier);
 die_type : identifier -> ^(ATTR TYPE identifier)
     | offset -> ^(ATTR TYPE offset);
 
-die : offset? die_tag die_name? (COLON die_type)? attr_list? (OPEN_BRACE children=die* CLOSE_BRACE)? SEMICOLON
-        -> ^(DIE die_tag ^(ATTRS die_name die_type attr_list) ^(CHILDREN $children) offset)
+die : offset? die_tag die_name? (COLON die_type)? attr_list? (OPEN_BRACE die* CLOSE_BRACE)? SEMICOLON
+        -> ^(DIE die_tag ^(ATTRS die_name die_type attr_list) ^(CHILDREN die*) offset)
     ;
 
 toplevel : die* -> ^(DIES die*);
