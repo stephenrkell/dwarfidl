@@ -150,8 +150,8 @@ namespace dwarfidl
 		}
 	}
 	 
-	 iterator_base create_one_die(iterator_base& parent, Tree *d,
-								  vector<pair<iterator_base&, Tree*> > &postpone,
+	 iterator_base create_one_die(const iterator_base& parent, Tree *d,
+								  vector<pair<const iterator_base&, Tree*> > &postpone,
 								  const std::map<Tree *, iterator_base>& nested /* = ... */)
 	 {
 		INIT;
@@ -212,7 +212,7 @@ namespace dwarfidl
 			
 			} catch (ident_not_found const &e) {
 				 cerr << "Ident not found: '" << e.what() << "', postponing to next pass" << endl;
-				 postpone.push_back(pair<iterator_base&, Tree*>(parent, d));
+				 postpone.push_back(pair<const iterator_base&, Tree*>(parent, d));
 				 return parent.root().end();
 			}
 		}
@@ -229,9 +229,9 @@ namespace dwarfidl
 		return created;
 	}
 	
-	 iterator_base create_one_die_with_children(iterator_base& parent,
+	 iterator_base create_one_die_with_children(const iterator_base& parent,
 												Tree *d,
-												vector<pair<iterator_base&, Tree*> > &postpone)
+												vector<pair<const iterator_base&, Tree*> > &postpone)
 	{
 		cerr << "Creating a DIE from " << CCP(TO_STRING_TREE(d)) << endl;
 
@@ -267,7 +267,7 @@ namespace dwarfidl
 							name.begin(), name.end());
 						if (!found) {
 							 cerr << "Could not resolve name " << CCP(TO_STRING_TREE(value)) << ", postponing to next pass" << endl;
-							 postpone.push_back(pair<iterator_base&, Tree*>(parent, d));
+							 postpone.push_back(pair<const iterator_base&, Tree*>(parent, d));
 							 return parent.root().end();
 						}
 						nested[value] = found;
@@ -291,7 +291,7 @@ namespace dwarfidl
 		return created;
 	}
 
-	 iterator_base find_or_create_die(iterator_base& parent, Tree *ast, std::vector<std::pair<iterator_base&, antlr::tree::Tree*> > &postpone)
+	 iterator_base find_or_create_die(const iterator_base& parent, Tree *ast, std::vector<std::pair<const iterator_base&, antlr::tree::Tree*> > &postpone)
 	{
 		/* Sometimes we can search for an existing DIE. But currently we blindly
 		 * re-create DIEs that might already be existing. */
@@ -307,7 +307,7 @@ namespace dwarfidl
 	}
 
 
-	iterator_base create_dies(iterator_base& parent, Tree *ast)
+	iterator_base create_dies(const iterator_base& parent, Tree *ast)
 	{
 		/* Walk the tree. Create any DIE we see. We also have to
 		 * scan attrs and create any that are inlined and do not
@@ -316,7 +316,7 @@ namespace dwarfidl
 		iterator_base first_created;
 
 		auto dummy_cu = parent.get_root().make_new(parent, DW_TAG_compile_unit);
-		vector<pair<iterator_base&, Tree*> > postpone;
+		vector<pair<const iterator_base&, Tree*> > postpone;
 		
 		// Initial pass: go straight from AST
 		FOR_ALL_CHILDREN(ast)
@@ -362,7 +362,7 @@ namespace dwarfidl
 		return first_created;
 	}
 	
-	iterator_base create_dies(iterator_base& parent, const string& some_dwarfidl)
+	iterator_base create_dies(const iterator_base& parent, const string& some_dwarfidl)
 	{
 		
 		/* Also open a dwarfidl file, read some DIE definitions from it. */
