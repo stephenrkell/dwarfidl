@@ -327,7 +327,7 @@ die : offset? die_tag die_name? (COLON die_type)? attr_list? (OPEN_BRACE die* CL
 toplevel : die* -> ^(DIES die*);
 
 expression
-	: for_expression
+	: (for_expression->for_expression) ((COMMA for_expression)+ -> ^(FP_UNION $expression for_expression+))?
 	;
 
 for_expression
