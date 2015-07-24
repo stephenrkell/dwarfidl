@@ -56,6 +56,7 @@ tokens {
 	FP_TRUE; // const
 	FP_FALSE; // const
     FP_SIZEOF; // unary
+    FP_VOID;
 	SUBSCRIPT_SCALAR;
 	SUBSCRIPT_RANGE;
 }
@@ -113,6 +114,7 @@ KEYWORD_ELSE : 'else';
 KEYWORD_AND : 'and';
 KEYWORD_OR : 'or';
 KEYWORD_NOT : 'not';
+KEYWORD_VOID: 'void';
 
 //KEYWORD_TAG : 'base_type' | 'pointer_type' | 'typedef' | 'structure_type' | 'const_type' | 'subprogram' | 'member' | 'formal_parameter';
 KEYWORD_TAG : 'root' 
@@ -428,6 +430,7 @@ primary_expression
 	: identifier
 	| INT
     | KEYWORD_TRUE -> FP_TRUE | KEYWORD_FALSE -> FP_FALSE
-	| OPEN expression CLOSE
-	;
+    | KEYWORD_VOID -> FP_VOID
+	| (OPEN expression CLOSE -> expression)
+	; 
 
