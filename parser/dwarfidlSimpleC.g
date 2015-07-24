@@ -58,6 +58,9 @@ tokens {
     FP_SIZEOF; // unary
     FP_DEREF; // unary
     FP_VOID;
+    FP_FUN;
+    FP_ARGS;
+    FP_APP; // binary
 	SUBSCRIPT_SCALAR;
 	SUBSCRIPT_RANGE;
 }
@@ -116,6 +119,8 @@ KEYWORD_AND : 'and';
 KEYWORD_OR : 'or';
 KEYWORD_NOT : 'not';
 KEYWORD_VOID: 'void';
+KEYWORD_FUN: 'fun';
+KEYWORD_FOOTPRINT_FUNCTION: 'footprint_function';
 
 
 // // for debugging using antlrworks -- uncomment these and comment
@@ -308,8 +313,8 @@ fp_clauses : OPEN_BRACE fp_clause* CLOSE_BRACE
         -> ^(FP_CLAUSES fp_clause+)  
     ;
 
-fp_clause : expression (COMMA expression)* SEMICOLON -> ^(FP_CLAUSE KEYWORD_RW expression+)
-    | (a=KEYWORD_R|a=KEYWORD_W|a=KEYWORD_RW) COLON expression (COMMA expression)* SEMICOLON -> ^(FP_CLAUSE $a expression+)
+fp_clause : expression SEMICOLON -> ^(FP_CLAUSE KEYWORD_RW expression)
+    | (a=KEYWORD_R|a=KEYWORD_W|a=KEYWORD_RW) COLON expression SEMICOLON -> ^(FP_CLAUSE $a expression)
     ;
 
 loc_opcode : IDENT (OPEN INT (COMMA INT)? CLOSE)? SEMICOLON
@@ -331,14 +336,28 @@ die_name: identifier -> ^(ATTR NAME identifier);
 die_type : identifier -> ^(ATTR TYPE identifier)
     | offset -> ^(ATTR TYPE offset);
 
-die : offset? die_tag die_name? (COLON die_type)? attr_list? (OPEN_BRACE die* CLOSE_BRACE)? SEMICOLON
+subprogram_arg
+    : die_name (COLON die_type)?
+    -> ^(DIE KEYWORD_TAG["formal_parameter"] ^(ATTRS die_name die_type?) CHILDREN)
+    ;
+
+subprogram_die
+    : offset? 'subprogram' die_name? ((OPEN (args+=subprogram_arg (COMMA args+=subprogram_arg)*)? CLOSE ('->' die_type)?)| COLON die_type)? attr_list? (OPEN_BRACE die* CLOSE_BRACE)? SEMICOLON
+    -> ^(DIE KEYWORD_TAG["subprogram"] ^(ATTRS die_name? die_type? attr_list) ^(CHILDREN $args * die*) offset)
+    ;
+
+other_die : offset? die_tag die_name? (COLON die_type)? attr_list? (OPEN_BRACE die* CLOSE_BRACE)? SEMICOLON
         -> ^(DIE die_tag ^(ATTRS die_name die_type attr_list) ^(CHILDREN die*) offset)
     ;
 
+die : subprogram_die | other_die | toplevel_function;
+
 toplevel : die* -> ^(DIES die*);
 
-expression
-	: (for_expression->for_expression) ((COMMA for_expression)+ -> ^(FP_UNION $expression for_expression+))?
+expression : union_expression;
+
+union_expression
+	: (for_expression->for_expression) ((COMMA for_expression)+ -> ^(FP_UNION $union_expression for_expression+))?
 	;
 
 for_expression
@@ -418,14 +437,23 @@ postfix_expression
 		|   '{' expression (RANGE expression)? '}' -> ^(FP_SUBSCRIPT FP_DIRECTBYTES $postfix_expression expression+)
 		|   '[{' expression (RANGE expression)? '}]' -> ^(FP_SUBSCRIPT FP_DEREFBYTES $postfix_expression expression+)
         |   '.' identifier -> ^(FP_MEMBER $postfix_expression identifier)
+		|   OPEN args+=for_expression (COMMA args+=for_expression)* CLOSE -> ^(FP_APP $postfix_expression ^(FP_ARGS $args +))
         )*
 	;
 
+function_definition : name=identifier OPEN args+=identifier (COMMA args+=identifier)* CLOSE OPEN_BRACE expression CLOSE_BRACE
+	  			-> ^(FP_FUN $name ^(FP_ARGS $args +) expression)
+				;
+			
 primary_expression
 	: identifier
 	| INT
     | KEYWORD_TRUE -> FP_TRUE | KEYWORD_FALSE -> FP_FALSE
     | KEYWORD_VOID -> FP_VOID
 	| (OPEN expression CLOSE -> expression)
+    | KEYWORD_FUN function_definition -> function_definition
 	; 
 
+toplevel_function
+ : KEYWORD_FOOTPRINT_FUNCTION function_definition -> function_definition;
+   
