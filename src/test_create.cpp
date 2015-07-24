@@ -4,10 +4,7 @@
 #include <fstream>
 #include <string>
 
-#include "antlr3.h"
-#include "antlr3defs.h"
-#include "dwarfidlSimpleCLexer.h"
-#include "dwarfidlSimpleCParser.h"
+#include "dwarfidl/parser_includes.h"
 
 #include "dwarfidl/create.hpp"
 #include "dwarfprint.hpp"

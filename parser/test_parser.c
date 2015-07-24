@@ -1,10 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
 
-#include "antlr3.h"
-#include "antlr3defs.h"
-#include "dwarfidlSimpleCLexer.h"
-#include "dwarfidlSimpleCParser.h"
+#include "dwarfidl/parser_includes.h"
 
 typedef ANTLR3_TOKEN_SOURCE TokenSource;
 typedef ANTLR3_COMMON_TOKEN CommonToken;

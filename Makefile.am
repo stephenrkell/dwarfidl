@@ -1,6 +1,8 @@
 ACLOCAL_AMFLAGS = -I m4
 
-AM_CXXFLAGS = -std=c++11 -ggdb3 -O0 -Wall -Wno-deprecated-declarations -Wp,-w -Iinclude -Iinclude/dwarfidl -Iparser $(LIBSRK31CXX_CFLAGS) $(LIBCXXFILENO_CFLAGS) $(LIBANTLR3CXX_CFLAGS) $(LIBDWARFPP_CFLAGS) $(LIBCXXGEN_CFLAGS)
+AM_CXXFLAGS = -std=c++11 -ggdb3 -O0 -Wall -Wno-deprecated-declarations -Iinclude -Iinclude/dwarfidl -Iparser $(LIBSRK31CXX_CFLAGS) $(LIBCXXFILENO_CFLAGS) $(LIBANTLR3CXX_CFLAGS) $(LIBDWARFPP_CFLAGS) $(LIBCXXGEN_CFLAGS) -fPIC -DPIC
+
+AM_CFLAGS = -fPIC -DPIC -g -O0 -Iinclude -Iinclude/dwarfidl -Iparser
 
 AM_LDFLAGS = -lstdc++ -lm
 
@@ -10,7 +12,7 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = dwarfidl.pc
 
 dwarfidl_includedir = $(includedir)/dwarfidl
-dwarfidl_include_HEADERS = include/dwarfidl/create.hpp include/dwarfidl/cxx_model.hpp include/dwarfidl/dwarfidl_cxx_target.hpp include/dwarfidl/dwarf_interface_walk.hpp include/dwarfidl/lang.hpp parser/dwarfidlSimpleCParser.h parser/dwarfidlSimpleCLexer.h
+dwarfidl_include_HEADERS = include/dwarfidl/create.hpp include/dwarfidl/cxx_model.hpp include/dwarfidl/dwarfidl_cxx_target.hpp include/dwarfidl/dwarf_interface_walk.hpp include/dwarfidl/lang.hpp parser/dwarfidlSimpleCParser.h parser/dwarfidlSimpleCLexer.h include/dwarfidl/parser_includes.h
 
 lib_LTLIBRARIES = src/libdwarfidl.la
 src_libdwarfidl_la_SOURCES = src/cxx_model.cpp src/dwarfidl_cxx_target.cpp src/dwarf_interface_walk.cpp src/create.cpp src/lang.cpp src/print.cpp parser/dwarfidlSimpleCLexer.c parser/dwarfidlSimpleCParser.c
