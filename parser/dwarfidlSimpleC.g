@@ -117,7 +117,15 @@ KEYWORD_OR : 'or';
 KEYWORD_NOT : 'not';
 KEYWORD_VOID: 'void';
 
+
+// // for debugging using antlrworks -- uncomment these and comment
+// // the following normal KEYWORD_TAG and KEYWORD_ATTR definitions
+// // because apparently Java can't deal with so many keywords in
+// // a lexer as it produces too large a class file
+// // (I know, seriously, right)
 //KEYWORD_TAG : 'base_type' | 'pointer_type' | 'typedef' | 'structure_type' | 'const_type' | 'subprogram' | 'member' | 'formal_parameter';
+//KEYWORD_ATTR :  'no_attr';
+
 KEYWORD_TAG : 'root' 
 | 'inlined_subroutine'
 | 'ptr_to_member_type'
@@ -404,29 +412,14 @@ unary_expression
     | postfix_expression
 	;
 
-// postfix_expression
-// 	:   (primary_expression->primary_expression)
-//         (   '[' a=expression (RANGE b=expression -> ^(FP_SUBSCRIPT FP_DEREFSIZES $postfix_expression $a $b))? ']' -> ^(FP_SUBSCRIPT FP_DEREFSIZES $postfix_expression $a)
-// 		|   '{' a=expression (RANGE b=expression -> ^(FP_SUBSCRIPT FP_DIRECTBYTES $postfix_expression $a $b))? '}' -> ^(FP_SUBSCRIPT FP_DIRECTBYTES $postfix_expression $a)
-// 		|   '[{' a=expression (RANGE b=expression -> ^(FP_SUBSCRIPT FP_DEREFBYTES $postfix_expression $a $b))? '}]' -> ^(FP_SUBSCRIPT FP_DEREFBYTES $postfix_expression $a)
-//         |   '.' identifier -> ^(FP_MEMBER $postfix_expression identifier)
-//         )*
-// 	;
-
 postfix_expression
 	:   (primary_expression->primary_expression)
-        (   '[' a=subscript_range ']' -> ^(FP_SUBSCRIPT FP_DEREFSIZES $postfix_expression $a)
-		|   '{' a=subscript_range '}' -> ^(FP_SUBSCRIPT FP_DIRECTBYTES $postfix_expression $a)
-		|   '[{' a=subscript_range '}]' -> ^(FP_SUBSCRIPT FP_DEREFBYTES $postfix_expression $a)
+        (   '[' expression (RANGE expression)? ']' -> ^(FP_SUBSCRIPT FP_DEREFSIZES $postfix_expression expression+)
+		|   '{' expression (RANGE expression)? '}' -> ^(FP_SUBSCRIPT FP_DIRECTBYTES $postfix_expression expression+)
+		|   '[{' expression (RANGE expression)? '}]' -> ^(FP_SUBSCRIPT FP_DEREFBYTES $postfix_expression expression+)
         |   '.' identifier -> ^(FP_MEMBER $postfix_expression identifier)
         )*
 	;
-
-// needs backtrack enabled
-subscript_range
-    : (expression RANGE expression -> ^(SUBSCRIPT_RANGE expression expression))
-    |(expression -> ^(SUBSCRIPT_SCALAR expression))
-;
 
 primary_expression
 	: identifier
