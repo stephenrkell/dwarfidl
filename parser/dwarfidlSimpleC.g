@@ -56,6 +56,7 @@ tokens {
 	FP_TRUE; // const
 	FP_FALSE; // const
     FP_SIZEOF; // unary
+    FP_DEREF; // unary
     FP_VOID;
 	SUBSCRIPT_SCALAR;
 	SUBSCRIPT_RANGE;
@@ -395,11 +396,12 @@ multiplicative_expression
 ;
 
 unary_expression
-	: (postfix_expression -> postfix_expression)
-	| '-' postfix_expression -> ^(FP_NEG postfix_expression)
+	: '-' postfix_expression -> ^(FP_NEG postfix_expression)
 	| '~' postfix_expression -> ^(FP_BITNOT postfix_expression)
+    | '*' postfix_expression -> ^(FP_DEREF postfix_expression)
 	| KEYWORD_NOT postfix_expression -> ^(FP_NOT postfix_expression)
-	| KEYWORD_SIZEOF OPEN expression CLOSE -> ^(FP_SIZEOF expression)
+	| KEYWORD_SIZEOF OPEN postfix_expression CLOSE -> ^(FP_SIZEOF postfix_expression)
+    | postfix_expression
 	;
 
 // postfix_expression
