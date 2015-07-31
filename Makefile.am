@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS = -I m4
 
-AM_CXXFLAGS = -std=c++11 -ggdb3 -O0 -Wall -Wno-deprecated-declarations -Iinclude -Iinclude/dwarfidl -Iparser $(LIBSRK31CXX_CFLAGS) $(LIBCXXFILENO_CFLAGS) $(LIBANTLR3CXX_CFLAGS) $(LIBDWARFPP_CFLAGS) $(LIBCXXGEN_CFLAGS) -fPIC -DPIC
+AM_CXXFLAGS = -std=c++11 -ggdb -O0 -Wall -Wno-deprecated-declarations -Iinclude -Iinclude/dwarfidl -Iparser $(LIBSRK31CXX_CFLAGS) $(LIBCXXFILENO_CFLAGS) $(LIBANTLR3CXX_CFLAGS) $(LIBDWARFPP_CFLAGS) $(LIBCXXGEN_CFLAGS) -fPIC -DPIC
 
 AM_CFLAGS = -fPIC -DPIC -g -O0 -Iinclude -Iinclude/dwarfidl -Iparser
 
