@@ -25,6 +25,7 @@ tokens {
 	FP_DEREFSIZES;
 	FP_DEREFBYTES;
 	FP_UNION;
+    FP_ADJACENT;
 	FP_FOR; // for_loop
 	FP_IF; // if_cond
 	FP_GT; // binary
@@ -102,6 +103,7 @@ PLUS       : '+';
 RANGE      : '..';
 EXCL       : '!';
 DOT        : '.';
+HASH       : '#';
 
 KEYWORD_TRUE   : 'true';
 KEYWORD_FALSE  : 'false';
@@ -414,8 +416,13 @@ toplevel : die* -> ^(DIES die*);
 expression : union_expression;
 
 union_expression
-	: (for_expression->for_expression) ((COMMA for_expression)+
-			-> ^(FP_UNION $union_expression for_expression+))?
+	: (adjacent_expression->adjacent_expression) ((COMMA adjacent_expression)+
+			-> ^(FP_UNION $union_expression adjacent_expression+))?
+	;
+
+adjacent_expression
+	: (for_expression->for_expression) ((HASH for_expression)+
+			-> ^(FP_ADJACENT $adjacent_expression for_expression+))?
 	;
 
 for_expression
