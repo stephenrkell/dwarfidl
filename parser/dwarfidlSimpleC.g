@@ -4,7 +4,6 @@ grammar dwarfidlSimpleC;
 options {
 	language=C;
 	output=AST;
-	backtrack=true;
 }
 
 tokens {
@@ -130,8 +129,8 @@ KEYWORD_FOOTPRINT_FUNCTION: 'footprint_function';
 // // because apparently Java can't deal with so many keywords in
 // // a lexer as it produces too large a class file
 // // (I know, seriously, right)
-//KEYWORD_TAG : 'base_type' | 'pointer_type' | 'typedef' | 'structure_type' | 'const_type' | 'subprogram' | 'member' | 'formal_parameter';
-//KEYWORD_ATTR :  'no_attr';
+// KEYWORD_TAG : 'base_type' | 'pointer_type' | 'typedef' | 'structure_type' | 'const_type' | 'subprogram' | 'member' | 'formal_parameter';
+// KEYWORD_ATTR :  'no_attr';
 
 KEYWORD_TAG
 	: 'root' 
@@ -322,20 +321,9 @@ identifier
 		| i+=NAME
 		| i+=TYPE
 		| i+=KEYWORD_TAG
-			/* | i+=KEYWORD_TRUE
-			   | i+=KEYWORD_FALSE
-			   | i+=KEYWORD_FOR
-			   | i+=KEYWORD_IN |*/
 		| i+=KEYWORD_R
 		| i+=KEYWORD_W
 		| i+=KEYWORD_RW
-		| i+=KEYWORD_SIZEOF
-			/* | i+=KEYWORD_IF
-			   | i+=KEYWORD_THEN
-			   | i+=KEYWORD_ELSE
-			   | i+=KEYWORD_AND
-			   | i+=KEYWORD_OR
-			   | i+=KEYWORD_NOT*/
 		)+
 		-> ^(IDENTS $i+)
 	;
@@ -398,15 +386,15 @@ subprogram_arg
 
 subprogram_die
 	: offset? 'subprogram' die_name? ((OPEN (args+=subprogram_arg (COMMA args+=subprogram_arg)*)? CLOSE ('->' die_type)?)| COLON die_type)? attr_list? (OPEN_BRACE die* CLOSE_BRACE)? SEMICOLON
-		-> ^(DIE KEYWORD_TAG["subprogram"] ^(ATTRS die_name? die_type? attr_list) ^(CHILDREN $args * die*) offset)
+		-> ^(DIE KEYWORD_TAG["subprogram"] ^(ATTRS die_name? die_type? attr_list?) ^(CHILDREN $args * die*) offset?)
 	;
 
 other_die : offset? die_tag die_name? (COLON die_type)? attr_list? (OPEN_BRACE die* CLOSE_BRACE)? SEMICOLON
-		-> ^(DIE die_tag ^(ATTRS die_name die_type attr_list) ^(CHILDREN die*) offset)
+		-> ^(DIE die_tag ^(ATTRS die_name? die_type? attr_list?) ^(CHILDREN die*) offset?)
 	;
 
 toplevel_function
- : KEYWORD_FOOTPRINT_FUNCTION function_definition
+ : KEYWORD_FOOTPRINT_FUNCTION function_definition SEMICOLON
 		-> function_definition;
 
 die : subprogram_die | other_die | toplevel_function;
@@ -544,7 +532,7 @@ unary_expression
 		-> ^(FP_DEREF postfix_expression)
 	| KEYWORD_NOT postfix_expression
 		-> ^(FP_NOT postfix_expression)
-	| KEYWORD_SIZEOF OPEN postfix_expression CLOSE
+	| KEYWORD_SIZEOF postfix_expression
 		-> ^(FP_SIZEOF postfix_expression)
 	| postfix_expression
 	;
