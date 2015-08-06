@@ -291,7 +291,7 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 				k = k.substr(6, string::npos); // remove DW_AT_
 			}
 
-			char *drop_attrs[] = {
+			const char *drop_attrs[] = {
 				 "decl_file",
 				 "decl_line",
 				 "prototyped",

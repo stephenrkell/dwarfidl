@@ -540,12 +540,12 @@ unary_expression
 postfix_expression
 	:	(primary_expression->
 			primary_expression)
-		(	'[' expression (RANGE expression)? ']'
-			-> ^(FP_SUBSCRIPT FP_DEREFSIZES $postfix_expression expression+)
-		|	'{' expression (RANGE expression)? '}'
-			-> ^(FP_SUBSCRIPT FP_DIRECTBYTES $postfix_expression expression+)
-		|	'[{' expression (RANGE expression)? '}]'
-			-> ^(FP_SUBSCRIPT FP_DEREFBYTES $postfix_expression expression+)
+		(	'[' a=expression (RANGE b=expression)? ']'
+			-> ^(FP_SUBSCRIPT FP_DEREFSIZES $postfix_expression $a $b ?)
+		|	'{' a=expression (RANGE b=expression)? '}'
+			-> ^(FP_SUBSCRIPT FP_DIRECTBYTES $postfix_expression $a $b ?)
+		|	'[{' a=expression (RANGE b=expression)? '}]'
+			-> ^(FP_SUBSCRIPT FP_DEREFBYTES $postfix_expression $a  $b ?)
 		|	'.' identifier
 			-> ^(FP_MEMBER $postfix_expression identifier)
 		|	OPEN args+=for_expression (COMMA args+=for_expression)* CLOSE
