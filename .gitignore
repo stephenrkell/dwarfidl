@@ -9,6 +9,7 @@
 /parser/dwarfidlSimpleCLexer.c
 /parser/dwarfidlSimpleCParser.h
 /parser/dwarfidlSimpleCLexer.h
+/parser/dwarfidlSimpleC.tokens
 /dwarfidlSimpleC.tokens
 
 /Makefile
