@@ -15,7 +15,6 @@ AM_MAINTAINER_MODE
 AC_PROG_CXX
 
 AX_CXX_COMPILE_STDCXX_11
-CPPFLAGS="-std=c++11 $CPPFLAGS"
 export CXXFLAGS
 
 AC_CHECK_HEADER_STDBOOL
@@ -25,6 +24,8 @@ AC_CHECK_TYPES([ptrdiff_t])
 AC_PROG_LN_S
 AC_PROG_INSTALL
 
+OLD_CPPFLAGS=$CPPFLAGS
+CPPFLAGS="-std=c++11 $CPPFLAGS"
 AC_CHECK_HEADERS([algorithm assert.h cassert cctype cmath cstddef cstdio cstdlib fstream functional iostream iterator limits map memory regex set sstream stdio.h string unordered_map unordered_set], [], [AC_MSG_FAILURE([required standard headers: algorithm assert.h cassert cctype cmath cstddef cstdio cstdlib fstream functional iostream iterator limits map memory regex set sstream stdio.h string unordered_map unordered_set])])
 
 AX_BOOST_BASE
@@ -34,6 +35,8 @@ AC_HAVE_LIBRARY(boost_regex, [], [AC_MSG_FAILURE([boost::regex is required])])
 
 AC_CHECK_HEADER([antlr3.h], [], [AC_MSG_FAILURE([antlr3 is required])])
 AC_HAVE_LIBRARY(antlr3c, [], [AC_MSG_FAILURE([antlr3 is required])])
+
+CPPFLAGS=$OLD_CPPFLAGS
 
 PKG_PROG_PKG_CONFIG
 PKG_CHECK_MODULES([LIBCXXFILENO], [libcxxfileno])

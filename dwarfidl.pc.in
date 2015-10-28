@@ -11,5 +11,5 @@ Name: dwarfidl
 Description: Language, library and tools for DWARF-described interfaces 
 Version: 0.1
 Requires: libsrk31cxx libcxxfileno libdwarfpp libcxxgen libantlr3cxx
-Cflags: -I${includedir}
+Cflags: -I${includedir} -I${includedir}/dwarfidl
 Libs: -L${libdir} -ldwarfidl

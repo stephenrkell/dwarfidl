@@ -4,10 +4,7 @@
 #include <fstream>
 #include <string>
 
-#include "antlr3.h"
-#include "antlr3defs.h"
-#include "dwarfidlSimpleCLexer.h"
-#include "dwarfidlSimpleCParser.h"
+#include "dwarfidl/parser_includes.h"
 
 #include "dwarfidl/create.hpp"
 #include "dwarfprint.hpp"
@@ -42,7 +39,9 @@ int main(int argc, char **argv)
 	iterator_base iter = create_dies(tree);
 
 	set<iterator_base> die_set;
+	
 	die_set.insert(iter);
+
 	print_dies(cout, die_set);
 	
 	return 0;

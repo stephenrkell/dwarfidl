@@ -103,17 +103,79 @@ string opcode_to_string(Dwarf_Loc expr) {
 	return ss.str();
 }
 
-void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_iter) {
+static inline void _debug_print_dedup(iterator_df<dwarf::core::type_die> type_die, iterator_df<dwarf::core::type_die> dedup_type_iter) {
+	 cerr << "Searching type set for";
+	 if (type_die.name_here()) {
+		  cerr << " '" << *type_die.name_here() << "'";
+	 }
+	 if (type_die.offset_here()) {
+		  cerr << " @" << to_hex(type_die.offset_here());
+	 }
+	 if (!type_die.name_here() && !type_die.offset_here()) {
+		  cerr << " <some anonymous DIE>";
+	 }
+	 cerr << ", got";
+	 if (dedup_type_iter.name_here()) {
+		  cerr << " '" << *dedup_type_iter.name_here() << "'";
+	 }
+	 if (dedup_type_iter.offset_here()) {
+		  cerr << " @" << to_hex(dedup_type_iter.offset_here());
+	 }
+	 if (!dedup_type_iter.name_here() && !dedup_type_iter.offset_here()) {
+		  cerr << " <some anonymous DIE>";
+	 }
+	 cerr << "." << endl;
+}
+
+static inline void _debug_print_print(optional<string> name_ptr, Dwarf_Off offset, iterator_df<dwarf::core::type_die> type_die, iterator_df<dwarf::core::type_die> concrete_die) {
+	 cerr << "Printing type name for ";
+	 if (name_ptr) {
+		  cerr << "'" << *name_ptr << "'";
+	 } else if (offset) {
+		  cerr << "@0x" << to_hex(offset);
+	 } else {
+		  cerr << "<some anonymous DIE>";
+	 }
+	 cerr << ": abstract type name";
+	 if (type_die->get_name()) {
+		  cerr << " = '" << *(type_die->get_name()) << "'";
+	 } else {
+		  cerr << " is unknown";
+	 }
+	 if (concrete_die) {
+		  cerr << ", concrete type name";
+		  if (concrete_die->get_name()) {
+			   cerr << " = '" << *(concrete_die->get_name()) << "'";
+		  } else {
+			   cerr << " is unknown";
+		  }
+	 } else {
+		  cerr << ", no concrete type found";
+	 }
+	 cerr << "." << endl;
+
+}
+
+
+
+void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_iter, optional<type_set&> types) {
 	if (!die_iter) return;
+	
+	// Special case root early: just print all children
+	if (die_iter.tag_here() == 0) {
+		auto children = die_iter.children_here();
+		for (auto iter = children.first; iter != children.second; iter++) {
+			 print_type_die(_s, iter.base(), types);
+			_s << endl;
+		}
+		return;
+	}
 	
 	srk31::indenting_newline_ostream s(_s);
 	//	auto &die = *die_iter;
 	auto name_ptr = die_iter.name_here();
 	auto tag = string(DEFAULT_DWARF_SPEC.tag_lookup(die_iter.tag_here())); 
 	if (tag.compare("(unknown tag)") == 0) {
-		// FIXME FIXME FIXME
-		if (die_iter.tag_here() != 0) // root
-			return;
 		// Leave unknown tags as hex
 		tag = to_hex(die_iter.tag_here());
 	} else {
@@ -141,61 +203,74 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 	
 	auto attrs = die_iter.copy_attrs(die_iter.get_root());
 	auto &root = die_iter.get_root();
+
+	/* Convert the type offset into a name if possible. */
+	/* Two types (ha) of die with type information:
+	   with_type_describing_layout_die => variables, members, etc, things *with* a type
+	   type_describing_subprogram_die => subprograms (functions etc) *returning* a thing with a type
+	   type_chain_die => things which are types with a type, e.g. typedefs, pointers, arrays
+	   (yes, you're right, I can't count)
+	*/
+	dwarf::core::iterator_df<dwarf::core::type_die> type_die;
 	auto with_type_iter = die_iter.as_a<with_type_describing_layout_die>();
-	if (with_type_iter) {
-		auto type_die = with_type_iter->get_type(root);
-		auto abstract_name = type_die.name_here();
-		if (type_die && abstract_name) {
-			auto concrete_die = type_die->get_concrete_type(root);
-			auto concrete_name = concrete_die.name_here();
-			auto type_name = (concrete_name ? concrete_name : abstract_name);
-			if (type_name) {
-				s << " : " << *type_name;
-				type_printed = true;
-
-				cerr << "Printing type name for ";
-				if (name_ptr) {
-					cerr << "'" << *name_ptr << "'";
-				} else if (offset) {
-					cerr << "@0x" << to_hex(offset);
-				} else {
-					cerr << "<some anonymous DIE>";
-				}
-				cerr << ": abstract type name";
-				if (type_die->get_name()) {
-					cerr << " = '" << *(type_die->get_name()) << "'";
-				} else {
-					cerr << " is unknown";
-				}
-				if (concrete_die) {
-					cerr << ", concrete type name";
-					if (concrete_die->get_name()) {
-						cerr << " = '" << *(concrete_die->get_name()) << "'";
-					} else {
-						cerr << " is unknown";
-					}
-				} else {
-					cerr << ", no concrete type found";
-				}
-				cerr << "." << endl;
-			}
-		}
+	auto returning_type_iter = die_iter.as_a<type_describing_subprogram_die>();
+	auto type_chain_iter = die_iter.as_a<type_chain_die>();
+	if (with_type_iter) type_die = with_type_iter->get_type();
+	else if (returning_type_iter) type_die = returning_type_iter->get_type();
+	else if (type_chain_iter) type_die = type_chain_iter->get_type();
+	
+	if (type_die) {
+		 // Dedup
+		 if (types) {
+			  auto dedup_type_iter = types->find(type_die);
+			  //assert(dedup_type_iter != types->end());
+			  if (dedup_type_iter != types->end()) {
+				   _debug_print_dedup(type_die, *dedup_type_iter);
+				   type_die = *dedup_type_iter;
+			  }
+		 }
+		 auto abstract_name = type_die.name_here();
+		 // Concretify (traverse typedefs etc)
+		 auto concrete_die = type_die->get_concrete_type(root);
+		 // Also dedup that. Just in case.
+		 if (concrete_die && types) {
+			  auto concrete_die_iter = types->find(concrete_die);
+			  //assert(concrete_die_iter != types->end());
+			  if (concrete_die_iter != types->end()) {
+				   _debug_print_dedup(concrete_die, *concrete_die_iter);
+				   concrete_die = *concrete_die_iter;
+			  }
+		 }
+		 auto concrete_name = concrete_die.name_here();
+		 auto type_name = (concrete_name ? concrete_name : abstract_name);
+		 if (type_name) {
+			  _debug_print_print(name_ptr, offset, type_die, concrete_die);
+			  s << " : " << *type_name;
+		 } else {
+			  auto type_offset = (concrete_die ? concrete_die.offset_here() : type_die.offset_here());
+			  s << " : @" << to_hex(type_offset);
+			  
+			  if (types->find(type_die) == types->end() && types->find(concrete_die) == types->end()) {
+				   cerr << endl << "WARNING: a type was called for that wasn't in types!" << endl << "abstract: ";
+				   type_die.print_with_attrs(cerr, 0);
+				   cerr << endl << "concrete: ";
+				   concrete_die.print_with_attrs(cerr, 0);
+				   cerr << endl << "context: ";
+				   die_iter.print_with_attrs(cerr, 0);
+				   cerr << endl << endl;
+			  }
+			  type_printed = true;
+		 }
+		 
+	} else {
+		 try {
+			  auto &v = attrs.at(DW_AT_type);
+			  auto ref = v.get_ref();
+			  s << " : " << (ref.abs ? "@" : "+") << to_hex(ref.off);
+			  type_printed = true;
+		 } catch (std::out_of_range) {}
 	}
-	if (!type_printed) {
-		try {
-			auto &v = attrs.at(DW_AT_type);
-			auto ref = v.get_ref();
-			s << " : ";
-			if (ref.abs) {
-				s << "@";
-			} else {
-				s << "+";
-			}
-			s << to_hex(ref.off);
-			type_printed = true;
-		} catch (std::out_of_range) {}
-	}
-
+	
 	/* Attribute list */
 
 	if (name_printed) attrs.erase(DW_AT_name);
@@ -215,6 +290,22 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 			} else {
 				k = k.substr(6, string::npos); // remove DW_AT_
 			}
+
+			const char *drop_attrs[] = {
+				 "decl_file",
+				 "decl_line",
+				 "prototyped",
+				 "external",
+				 "sibling",
+				 nullptr
+			};
+
+			for (unsigned int i = 0; drop_attrs[i] != nullptr; i++) {
+				 if (k.compare(drop_attrs[i]) == 0) {
+					  continue;
+				 }
+			}
+			
 			auto v = pair.second;
 			if (attrs_printed++ != 0) {
 				s << "," << endl;
@@ -297,6 +388,9 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 		s << " {";
 		s.inc_level();
 		for (auto iter = children.first; iter != children.second; iter++) {
+			 // user tags
+			 if (iter.tag_here() > 0x4000) continue;
+			 
 			switch (iter.tag_here()) {
 				// Only print these tags
 			case DW_TAG_compile_unit:
@@ -304,66 +398,42 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 			case DW_TAG_formal_parameter:
 			case DW_TAG_subprogram:
 			case 0: // root
-				print_type_die(s, iter.base());
+				 print_type_die(s, iter.base(), types);
 				s << endl;
-				break; // definitely
-			default:    // not 
-				continue; // confusing
+				break;
+			case DW_TAG_inlined_subroutine:
+			case DW_TAG_lexical_block:
+			case DW_TAG_variable:
+				 // Specifically skip some.
+				 continue; // definitely
+				 break; // not confusing
+			default:
+				 print_type_die(s, iter.base(), types);
+				 s << endl;
+				 break;
 			}
 		}
 		s.dec_level();
 		s << "}";
 	}
 	
-	// auto member_children = die_iter.children_here().subseq_of<member_die>();
-	// auto param_children = die_iter.children_here().subseq_of<formal_parameter_die>();
-	// auto member_children_begin = member_children.first;
-	// auto member_children_end = member_children.second;
-	// auto param_children_begin = param_children.first;
-	// auto param_children_end = param_children.second;
-
-	// auto children = die_iter.children_here().subseq_with<[iterator_base &iter] {
-	// 	return (iter->is_a<compile_unit_die>() || iter->is_a<member_die>() || iter->is_a<formal_parameter_die>() || iter->is_a<subprogram_die>() || iter->is_a<root_die>());
-	// }>();
-
-	//	bool has_children = member_children_begin != member_children_end || param_children_begin != param_children_end;
-	
-	// if (has_children) {
-	// 	s << " {";
-	// 	s.inc_level();
-	// }
-	
-	// for (auto iter = param_children_begin; iter != param_children_end; iter++) {
-	// 	print_type_die(s, iter.base().base());
-	// 	s << endl;
-	// }
-	
-	// for (auto iter = member_children_begin; iter != member_children_end; iter++) {
-	// 	print_type_die(s, iter.base().base());
-	// 	s << endl;
-	// }
-	
-	// if (has_children) {
-	// 	s.dec_level();
-	// 	s << "}";
-	// }
 	s << ";";
 }
 
-string dies_to_idl(set<iterator_base> dies) {
+string dies_to_idl(set<iterator_base> dies, optional<type_set&> types) {
 	ostringstream ss;
 	ss.clear();
 	for (auto iter = dies.begin(); iter != dies.end(); iter++) {
-		print_type_die(ss, *iter);
+		 print_type_die(ss, *iter, types);
 		ss << endl << endl;
 	}
 	return ss.str();
 }
 
-void print_dies(ostream &s, set<iterator_base> dies) {
+void print_dies(ostream &s, set<iterator_base> dies, optional<type_set&> types) {
 	for (auto iter = dies.begin(); iter != dies.end(); iter++) {
-		print_type_die(s, *iter);
-		s << endl << endl;
+		 print_type_die(s, *iter, types);
+		 s << endl << endl;
 	}
 }
 
