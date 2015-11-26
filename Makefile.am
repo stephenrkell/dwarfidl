@@ -31,23 +31,23 @@ parser_test_parser_LDADD = -lantlr3c
 
 
 src_dwarfidldump_SOURCES = src/dwarfidldump.cpp src/print.cpp
-src_dwarfidldump_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS)
+src_dwarfidldump_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -ldwarf -lelf
 
 
 src_test_dwarfprint_SOURCES = src/test_dwarfprint.cpp src/dwarfprint.cpp src/print.cpp
-src_test_dwarfprint_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS)
+src_test_dwarfprint_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -ldwarf -lelf
 
 
 src_dwarfhpp_SOURCES = src/dwarfhpp.cpp
-src_dwarfhpp_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS)
+src_dwarfhpp_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -ldwarf -lelf
 
 
 src_dwarf_ocaml_ctypesgen_SOURCES = src/dwarf-ocaml-ctypesgen.cpp
-src_dwarf_ocaml_ctypesgen_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS)
+src_dwarf_ocaml_ctypesgen_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -ldwarf -lelf
 
 
 src_test_create_SOURCES = src/create.cpp src/test_create.cpp src/dwarfprint.cpp src/print.cpp
-src_test_create_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS)
+src_test_create_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -ldwarf -lelf
 
 
 BUILT_SOURCES = parser/dwarfidlSimpleCLexer.c parser/dwarfidlSimpleCParser.c parser/dwarfidlSimpleCLexer.h parser/dwarfidlSimpleCParser.h
@@ -58,3 +58,42 @@ ANTLR = java -classpath contrib/antlr-3.4-complete.jar:$(CLASSPATH) org.antlr.To
 parser/dwarfidlSimpleCLexer.c parser/dwarfidlSimpleCParser.c parser/include/dwarfidlSimpleCLexer.h parser/include/dwarfidlSimpleCParser.h: parser/dwarfidlSimpleC.g 
 	$(ANTLR) "$<"	
 
+# pkg-config doesn't understand PKG_CXXFLAGS, but I'm buggered
+# if I'm going to have my Makefiles use _CFLAGS to mean _CXXFLAGS.
+# So, if we find we have _CFLAGS set for these, either from pkg.m4
+# or because pkg.m4 told the user to set this var, and if we *don't*
+# have _CXXFLAGS for these things, propagate. Only one of the USER_*_CFLAGS
+# and *_CFLAGS should be non-empty. Note that if we got this far,
+# we *must* have a _CFLAGS, even if the user (sanely) didn't call it that,
+# because pkg-config will have complained if we didn't fake it up.
+if SUPPLIED_LIBCXXFILENO_CFLAGS
+LIBCXXFILENO_CXXFLAGS = $(USER_LIBCXXFILENO_CFLAGS)
+else
+LIBCXXFILENO_CXXFLAGS = $(LIBCXXFILENO_CFLAGS)
+endif
+if SUPPLIED_LIBDWARFPP_CFLAGS
+LIBDWARFPP_CXXFLAGS = $(USER_LIBDWARFPP_CFLAGS)
+else
+LIBDWARFPP_CXXFLAGS = $(LIBDWARFPP_CFLAGS)
+endif
+if SUPPLIED_LIBCXXGEN_CFLAGS
+LIBCXXGEN_CXXFLAGS = $(USER_LIBCXXGEN_CFLAGS)
+else
+LIBCXXGEN_CXXFLAGS = $(LIBCXXGEN_CFLAGS)
+endif
+if SUPPLIED_LIBSRK31CXX_CFLAGS
+LIBSRK31CXX_CXXFLAGS = $(USER_LIBSRK31CXX_CFLAGS)
+else
+LIBSRK31CXX_CXXFLAGS = $(LIBSRK31CXX_CFLAGS)
+endif
+if SUPPLIED_LIBANTLR3CXX_CFLAGS
+LIBANTLR3CXX_CXXFLAGS = $(USER_LIBANTLR3CXX_CFLAGS)
+else
+LIBANTLR3CXX_CXXFLAGS = $(LIBANTLR3CXX_CFLAGS)
+endif
+
+export LIBCXXFILENO_CXXFLAGS LIBCXXFILENO_LIBS \
+LIBSRK31CXX_CXXFLAGS LIBSRK31CXX_LIBS \
+LIBDWARFPP_CXXFLAGS LIBDWARFPP_LIBS \
+LIBCXXGEN_CXXFLAGS LIBCXXGEN_LIBS \
+LIBANTLR3CXX_CXXFLAGS LIBANTLR3CXX_LIBS

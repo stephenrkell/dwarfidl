@@ -38,6 +38,36 @@ AC_HAVE_LIBRARY(antlr3c, [], [AC_MSG_FAILURE([antlr3 is required])])
 
 CPPFLAGS=$OLD_CPPFLAGS
 
+# If the user (sanely) supplied _CXXFLAGS, and not _CFLAGS, 
+# duplicate the latter to the former.  See rant about pkg-config in Makefile.am.
+# We save the old _CFLAGS.
+USER_LIBCXXFILENO_CFLAGS="$LIBCXXFILENO_CFLAGS"
+LIBCXXFILENO_CFLAGS="$LIBCXXFILENO_CXXFLAGS"
+USER_LIBDWARFPP_CFLAGS="$LIBDWARFPP_CFLAGS"
+LIBDWARFPP_CFLAGS="$LIBDWARFPP_CXXFLAGS"
+USER_LIBCXXGEN_CFLAGS="$LIBCXXGEN_CFLAGS"
+LIBCXXGEN_CFLAGS="$LIBCXXGEN_CXXFLAGS"
+USER_LIBSRK31CXX_CFLAGS="$LIBSRK31CXX_CFLAGS"
+LIBSRK31CXX_CFLAGS="$LIBSRK31CXX_CXXFLAGS"
+USER_LIBANTLR3CXX_CFLAGS="$LIBANTLR3CXX_CFLAGS"
+LIBANTLR3CXX_CFLAGS="$LIBANTLR3CXX_CXXFLAGS"
+
+# Now, all the information from pkg-config or from user _CXXFLAGS) is in _CFLAGS.
+# We might also have USER_ _CFLAGS, if the user did what pkg.m4 stupidly told them.
+# We use this information (i.e. propagate to _CXXFLAGS) only if the user *didn't* give us
+# _CXXFLAGS.
+AM_CONDITIONAL(SUPPLIED_LIBCXXFILENO_CFLAGS, [test x"$USER_LIBCXXFILENO_CFLAGS" != x && test x"$LIBCXXFILENO_CXXFLAGS" = x])
+AM_CONDITIONAL(SUPPLIED_LIBDWARFPP_CFLAGS, [test x"$USER_LIBDWARFPP_CFLAGS" != x && test x"$LIBDWARFPP_CXXFLAGS" = x])
+AM_CONDITIONAL(SUPPLIED_LIBCXXGEN_CFLAGS, [test x"$USER_LIBCXXGEN_CFLAGS" != x && test x"$LIBCXXGEN_CXXFLAGS" = x])
+AM_CONDITIONAL(SUPPLIED_LIBSRK31CXX_CFLAGS, [test x"$USER_LIBSRK31CXX_CFLAGS" != x && test x"$LIBSRK31CXX_CXXFLAGS" = x])
+AM_CONDITIONAL(SUPPLIED_LIBANTLR3CXX_CFLAGS, [test x"$USER_LIBANTLR3CXX_CFLAGS" != x && test x"$LIBANTLR3CXX_CXXFLAGS" = x])
+
+# HACK: antlr3cxx doesn't need any libs, but PKG_CHECK_MODULES will 
+# complain if we don't have LIBANTLR3CXX_LIBS set to something
+# non-empty. So use an effect-free linker option.
+# LIBANTLR3CXX_LIBS=-Wl,-g
+# -- actually, the invoker of configure should do this.
+
 PKG_PROG_PKG_CONFIG
 PKG_CHECK_MODULES([LIBCXXFILENO], [libcxxfileno])
 PKG_CHECK_MODULES([LIBSRK31CXX], [libsrk31cxx])
