@@ -1,0 +1,3 @@
+[submodule "m4ntlr"]
+	path = m4ntlr
+	url = git://github.com/stephenrkell/m4ntlr.git
