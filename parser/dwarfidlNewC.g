@@ -1,4 +1,4 @@
-grammar dwarfidlSimpleC;
+grammar dwarfidlNewC;
 
 
 options {

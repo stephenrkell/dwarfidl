@@ -28,6 +28,9 @@ OLD_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="-std=c++11 $CPPFLAGS"
 AC_CHECK_HEADERS([algorithm assert.h cassert cctype cmath cstddef cstdio cstdlib fstream functional iostream iterator limits map memory regex set sstream stdio.h string unordered_map unordered_set], [], [AC_MSG_FAILURE([required standard headers: algorithm assert.h cassert cctype cmath cstddef cstdio cstdlib fstream functional iostream iterator limits map memory regex set sstream stdio.h string unordered_map unordered_set])])
 
+# AX_CHECK_CLASS([org.antlr.Tool], [], [AC_MSG_FAILURE([ANTLR v3 is required])])
+# # FIXME: check it's version 3.4 or 3.5, also
+
 AX_BOOST_BASE
 
 AC_CHECK_HEADER([boost/regex/concepts.hpp], [], [AC_MSG_FAILURE([boost::regex is required])])
