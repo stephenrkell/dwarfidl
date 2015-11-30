@@ -6,13 +6,14 @@ AM_CFLAGS = -fPIC -DPIC -g -O2 -Iinclude -Iinclude/dwarfidl -Iparser
 
 AM_LDFLAGS = -lstdc++ -lm
 
-
 extra_DIST = dwarfidl.pc.in
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = dwarfidl.pc
 
 dwarfidl_includedir = $(includedir)/dwarfidl
-dwarfidl_include_HEADERS = include/dwarfidl/create.hpp include/dwarfidl/cxx_model.hpp include/dwarfidl/dwarfidl_cxx_target.hpp include/dwarfidl/dwarf_interface_walk.hpp include/dwarfidl/lang.hpp parser/dwarfidlNewCParser.h parser/dwarfidlNewCLexer.h include/dwarfidl/parser_includes.h
+dwarfidl_include_HEADERS = include/dwarfidl/create.hpp include/dwarfidl/cxx_model.hpp \
+  include/dwarfidl/dwarfidl_cxx_target.hpp include/dwarfidl/dwarf_interface_walk.hpp \
+  include/dwarfidl/lang.hpp include/dwarfidl/dwarfidlNewCParser.h include/dwarfidl/dwarfidlNewCLexer.h
 
 lib_LTLIBRARIES = src/libdwarfidl.la
 src_libdwarfidl_la_SOURCES = src/cxx_model.cpp src/dwarfidl_cxx_target.cpp src/dwarf_interface_walk.cpp src/create.cpp src/lang.cpp src/print.cpp parser/dwarfidlNewCLexer.c parser/dwarfidlNewCParser.c
@@ -21,6 +22,22 @@ src_libdwarfidl_la_CFLAGS = $(AM_CFLAGS)
 src_libdwarfidl_la_CXXFLAGS = $(AM_CXXFLAGS)
 
 SUBDIRS = parser
+
+all: include/dwarfidl/dwarfidlNewCLexer.h include/dwarfidl/dwarfidlNewCParser.h
+
+include/dwarfidl/dwarfidlNewCLexer.h: parser
+	cd include/dwarfidl && ln -sf ../../parser/dwarfidlNewCLexer.h .
+
+include/dwarfidl/dwarfidlNewCParser.h: parser
+	cd include/dwarfidl && ln -sf ../../parser/dwarfidlNewCParser.h .
+
+lib/libdwarfidl.so: $(lib_LTLIBRARIES)
+	mkdir -p lib && cd lib && ln -sf ../src/.libs/libdwarfidl.so .
+
+lib/libdwarfidl.so.0: $(lib_LTLIBRARIES)
+	mkdir -p lib && cd lib && ln -sf ../src/.libs/libdwarfidl.so.0 .
+
+all: lib/libdwarfidl.so lib/libdwarfidl.so.0
 
 bin_PROGRAMS = src/dwarfidldump src/dwarfhpp src/dwarf-ocaml-ctypesgen
 

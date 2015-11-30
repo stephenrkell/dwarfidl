@@ -1,8 +1,8 @@
 #ifndef DWARFIDL_LANG_HPP_
 #define DWARFIDL_LANG_HPP_
 
-#define LEXER_INCLUDE "dwarfidlSimpleCLexer.h"
-#define PARSER_INCLUDE "dwarfidlSimpleCParser.h"
+#define LEXER_INCLUDE "dwarfidl/dwarfidlNewCLexer.h"
+#define PARSER_INCLUDE "dwarfidl/dwarfidlNewCParser.h"
 #include <antlr3cxx/parser.hpp>
 
 #include <string>

@@ -373,10 +373,10 @@ namespace dwarfidl
 			const_cast<unsigned char *>(reinterpret_cast<const unsigned char *>("blah"))
 		);
 		assert(str);
-		auto lexer = dwarfidlSimpleCLexerNew(str);
+		auto lexer = dwarfidlNewCLexerNew(str);
 		auto tokenStream = antlr3CommonTokenStreamSourceNew(ANTLR3_SIZE_HINT, TOKENSOURCE(lexer));
-		auto parser = dwarfidlSimpleCParserNew(tokenStream);
-		dwarfidlSimpleCParser_toplevel_return ret = parser->toplevel(parser);
+		auto parser = dwarfidlNewCParserNew(tokenStream);
+		dwarfidlNewCParser_toplevel_return ret = parser->toplevel(parser);
 		Tree *tree = ret.tree;
 
 		iterator_base first_created = create_dies(parent, tree);
