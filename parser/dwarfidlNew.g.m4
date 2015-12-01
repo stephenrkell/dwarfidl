@@ -1,10 +1,4 @@
-grammar dwarfidlNewC;
-
-
-options {
-	language=C;
-	output=AST;
-}
+include(head.g.m4)
 
 tokens {
 	DIES;
@@ -24,7 +18,7 @@ tokens {
 	FP_DEREFSIZES;
 	FP_DEREFBYTES;
 	FP_UNION;
-    FP_ADJACENT;
+	FP_ADJACENT;
 	FP_FOR; // for_loop
 	FP_IF; // if_cond
 	FP_GT; // binary
@@ -62,8 +56,47 @@ tokens {
 	FP_APP; // binary
 	SUBSCRIPT_SCALAR;
 	SUBSCRIPT_RANGE;
+	KEYWORD_TRUE;
+	KEYWORD_FALSE;
+	KEYWORD_FOR;
+	KEYWORD_IN;
+	KEYWORD_R;
+	KEYWORD_W;
+	KEYWORD_RW;
+	KEYWORD_SIZEOF;
+	KEYWORD_IF;
+	KEYWORD_THEN;
+	KEYWORD_ELSE;
+	KEYWORD_AND;
+	KEYWORD_OR;
+	KEYWORD_NOT;
+	KEYWORD_VOID;
+	KEYWORD_FUN;
+    UNDERSCORE;
 }
 
+
+antlr_m4_begin_rules
+
+UNDERSCORE : '_';
+KEYWORD_TRUE   : 'true';
+KEYWORD_FALSE  : 'false';
+KEYWORD_FOR    : 'for';
+KEYWORD_IN     : 'in';
+KEYWORD_R      : 'r';
+KEYWORD_W      : 'w';
+KEYWORD_RW     : 'rw';
+KEYWORD_SIZEOF : 'sizeof';
+KEYWORD_IF     : 'if';
+KEYWORD_THEN   : 'then';
+KEYWORD_ELSE   : 'else';
+KEYWORD_AND    : 'and';
+KEYWORD_OR     : 'or';
+KEYWORD_NOT    : 'not';
+KEYWORD_VOID   : 'void';
+KEYWORD_FUN    : 'fun';
+
+KEYWORD_FOOTPRINT_FUNCTION: 'footprint_function';
 fragment SPACE         : ' ';
 fragment ALPHA         : ('A'..'Z'|'a'..'z');
 fragment NONZERO_DIGIT : ('1'..'9');
@@ -94,7 +127,6 @@ ESCAPE_CHAR  : '\\';
 COMMA      : ',';
 COLON      : ':';
 SEMICOLON  : ';';
-UNDERSCORE : '_';
 HYPHEN     : '-';
 EQUALS     : '=';
 AT         : '@';
@@ -103,25 +135,6 @@ RANGE      : '..';
 EXCL       : '!';
 DOT        : '.';
 HASH       : '#';
-
-KEYWORD_TRUE   : 'true';
-KEYWORD_FALSE  : 'false';
-KEYWORD_FOR    : 'for';
-KEYWORD_IN     : 'in';
-KEYWORD_R      : 'r';
-KEYWORD_W      : 'w';
-KEYWORD_RW     : 'rw';
-KEYWORD_SIZEOF : 'sizeof';
-KEYWORD_IF     : 'if';
-KEYWORD_THEN   : 'then';
-KEYWORD_ELSE   : 'else';
-KEYWORD_AND    : 'and';
-KEYWORD_OR     : 'or';
-KEYWORD_NOT    : 'not';
-KEYWORD_VOID   : 'void';
-KEYWORD_FUN    : 'fun';
-
-KEYWORD_FOOTPRINT_FUNCTION: 'footprint_function';
 
 
 // // for debugging using antlrworks -- uncomment these and comment
@@ -294,10 +307,10 @@ STRING_LIT
 			(~DOUBLE_QUOTE | ESCAPE_CHAR DOUBLE_QUOTE)*
 		DOUBLE_QUOTE);
 
-NEWLINE       : '\r'? '\n' { $channel=HIDDEN; $line = $line + 1; };
-BLANKS        : ('\t'|' ')+ { $channel=HIDDEN; };
-LINE_COMMENT  : ('//' .* '\r'? '\n') { $channel=HIDDEN; };
-BLOCK_COMMENT : ('/*' .* '*/') { $channel=HIDDEN; };
+NEWLINE       : '\r'? '\n' { antlr_m4_newline_action };
+BLANKS        : ('\t'|' ')+ { antlr_m4_skip_action };
+LINE_COMMENT  : ('//' .* '\r'? '\n') { antlr_m4_skip_action };
+BLOCK_COMMENT : ('/*' .* '*/') { antlr_m4_skip_action };
 
 boolean_value : KEYWORD_TRUE | KEYWORD_FALSE;
 
@@ -351,7 +364,12 @@ loc_list
 	;
 
 attr_key   : KEYWORD_ATTR | NAME | TYPE | INT;
-attr_value : boolean_value | INT | offset | loc_list | STRING_LIT;
+attr_value : boolean_value | INT | die_reference | loc_list | STRING_LIT;
+
+die_reference : identifier
+	| offset
+	| '(' die ')' -> die
+	;
 
 attr
 	: FOOTPRINT EQUALS fp_clauses
@@ -373,10 +391,8 @@ die_name
 	;
 
 die_type
-	: identifier
-		-> ^(ATTR TYPE identifier)
-	| offset
-		-> ^(ATTR TYPE offset)
+	: die_reference
+		-> ^(ATTR TYPE die_reference)
 	;
 
 subprogram_arg
@@ -572,4 +588,4 @@ primary_expression
 	| KEYWORD_FUN function_definition
 		-> function_definition
 	; 
-   
+
