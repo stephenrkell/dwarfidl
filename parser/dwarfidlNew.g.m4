@@ -293,11 +293,11 @@ KEYWORD_ATTR
 	| 'macro_info'
 	| 'discr_value';
 
-fragment BEGIN_IDENT_CHAR : ALPHA | UNDERSCORE;
-fragment IDENT_CHAR       : ALPHA | UNDERSCORE | HYPHEN | DIGIT;
-fragment END_IDENT_CHAR   : ALPHA | UNDERSCORE | DIGIT;
+fragment BEGIN_IDENT_SEQ : '\\'.|'a'..'z'|'A'..'Z'|'_'+'a'..'z'|'_'+'A'..'Z'|'_'+'0'..'9';
+fragment CONT_IDENT_SEQ  : 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\\'.;
 
-IDENT : BEGIN_IDENT_CHAR (IDENT_CHAR* END_IDENT_CHAR)?;
+
+IDENT : BEGIN_IDENT_SEQ CONT_IDENT_SEQ*;
 
 STRING_LIT
 	: (SINGLE_QUOTE
