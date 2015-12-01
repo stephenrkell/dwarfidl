@@ -1,4 +1,7 @@
 THIS_MAKEFILE := $(lastword $(MAKEFILE_LIST))
+
+include $(dir $(THIS_MAKEFILE))/../config.mk
+
 OCAMLOPT ?= ocamlfind ocamlopt
 OCAMLOPTFLAGS += -linkpkg -package ctypes -package ctypes.foreign
 
@@ -49,24 +52,24 @@ _onlygdbrun-%:
 	gdb --args ./$* ./$*
 
 build-%:
-	$(MAKE) -C "$*" $(INCLUDE_MK_INC) -f ../makefile "$*" 
+	$(MAKE) -C "$*" $(INCLUDE_MK_INC) -f ../Makefile "$*" 
 
 run-%:
-	$(MAKE) build-$* && ( $(MAKE) -C "$*" $(INCLUDE_MK_INC) -f ../makefile _onlyrun-$* )
+	$(MAKE) build-$* && ( $(MAKE) -C "$*" $(INCLUDE_MK_INC) -f ../Makefile _onlyrun-$* )
 
 cleanbuild-%:
-	$(MAKE) -C $* $(INCLUDE_MK_INC) -f ../makefile clean && \
+	$(MAKE) -C $* $(INCLUDE_MK_INC) -f ../Makefile clean && \
 	$(MAKE) build-$* 
 
 cleanrun-%: 
-	$(MAKE) -C $* $(INCLUDE_MK_INC) -f ../makefile clean && \
+	$(MAKE) -C $* $(INCLUDE_MK_INC) -f ../Makefile clean && \
 	$(MAKE) run-$*
 
 gdbrun-%: # run the test case with itself as input
-	$(MAKE) -C "$*" $(INCLUDE_MK_INC) -f ../makefile "$*" && ( cd "$*" && $(MAKE) $(INCLUDE_MK_INC) -f ../makefile _onlygdbrun-$* )
+	$(MAKE) -C "$*" $(INCLUDE_MK_INC) -f ../Makefile "$*" && ( cd "$*" && $(MAKE) $(INCLUDE_MK_INC) -f ../Makefile _onlygdbrun-$* )
 
 gdbcleanrun-%:
-	$(MAKE) -C $* $(INCLUDE_MK_INC) -f ../makefile clean && $(MAKE) gdbrun-$*
+	$(MAKE) -C $* $(INCLUDE_MK_INC) -f ../Makefile clean && $(MAKE) gdbrun-$*
 
 clean-%:
 	$(MAKE) -C "$*" $(INCLUDE_MK_INC) -f $(realpath $(THIS_MAKEFILE)) clean
