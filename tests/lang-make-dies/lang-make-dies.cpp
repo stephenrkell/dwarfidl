@@ -22,10 +22,10 @@ int main(int argc, char **argv)
 		ANTLR3_ENC_UTF8
 	);
 	assert(str);
-	auto lexer = dwarfidlSimpleCLexerNew(str);
+	auto lexer = dwarfidlNewCLexerNew(str);
 	auto tokenStream = antlr3CommonTokenStreamSourceNew(ANTLR3_SIZE_HINT, TOKENSOURCE(lexer));
-	auto parser = dwarfidlSimpleCParserNew(tokenStream);
-	dwarfidlSimpleCParser_toplevel_return ret = parser->toplevel(parser);
+	auto parser = dwarfidlNewCParserNew(tokenStream);
+	dwarfidlNewCParser_toplevel_return ret = parser->toplevel(parser);
 	antlr::tree::Tree *tree = ret.tree;
 	
 	auto created_cu = r.make_new(r.begin(), DW_TAG_compile_unit);

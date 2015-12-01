@@ -81,7 +81,7 @@ namespace dwarfidl
 				if (attr != DW_AT_name) 
 				{
 					/* unless we're naming something, resolve this ident */
-					std::vector<string> name(1, identifier);//unescape_ident(CCP(GET_TEXT(d))));
+					std::vector<string> name(1, unescape_ident(identifier));
 					auto found = context.root().scoped_resolve(context,
 						name.begin(), name.end());
 					if (!found || found.tag_here() == 0 || found.offset_here() == 0) 
@@ -95,8 +95,7 @@ namespace dwarfidl
 				}
 				else
 				{
-					//string name = unescape_ident(CCP(GET_TEXT(d)));
-					return attribute_value(identifier);
+					return attribute_value(unescape_ident(identifier));
 				}
 			} break;
 			case TOKEN(INT): {
@@ -315,8 +314,32 @@ namespace dwarfidl
 		 * already exist. */
 		cerr << "Got AST: " << CCP(TO_STRING_TREE(ast)) << endl;
 		iterator_base first_created;
+		iterator_df<> real_parent;
 
-		auto dummy_cu = parent.get_root().make_new(parent, DW_TAG_compile_unit);
+		string top_tag_keyword;
+		{ 
+			// pre-pass: grab the first DIE's tag keyword
+			FOR_ALL_CHILDREN(ast)
+			{
+				cerr << "Got a node: " << CCP(TO_STRING_TREE(n)) << endl;
+				SELECT_ONLY(DIE);
+				INIT;
+				BIND2(n, tag_keyword);
+				top_tag_keyword = CCP(GET_TEXT(tag_keyword));
+			}
+		}
+			
+		/* Are we creating a compilation unit? */
+		if (top_tag_keyword != "compile_unit"
+			&& parent.enclosing_cu() == iterator_base::END)
+		{
+			/* Not under a compilation unit; add one and continue. */
+			auto dummy_cu = parent.get_root().make_new(parent.get_root().begin(),
+				DW_TAG_compile_unit);
+			if (!first_created) first_created = dummy_cu;
+			real_parent = dummy_cu;
+		} else real_parent = parent;
+
 		vector<pair<const iterator_base&, Tree*> > postpone;
 		
 		// Initial pass: go straight from AST
@@ -326,19 +349,10 @@ namespace dwarfidl
 			SELECT_ONLY(DIE);
 			INIT;
 			BIND2(n, tag_keyword);
-			if (string(CCP(GET_TEXT(tag_keyword))).compare("compile_unit") == 0)
-			{
-				// We are a compilation unit, continue
-				 auto created = create_one_die_with_children(parent, n, postpone);
-				if (!first_created) first_created = created;
-			}
-			else
-			{
-				// Not a compilation unit, need to add to the dummy one because
-				// having one is expected by lots of libdwarfpp
-				auto created = create_one_die_with_children(dummy_cu, n, postpone);
-				if (!first_created) first_created = created;
-			}
+			
+			auto created = create_one_die_with_children(real_parent, n, postpone);
+			if (!first_created) first_created = created;
+
 			if (getenv("DEBUG_CC")) cerr << "Created one DIE and its children; we now have: " << endl << parent.root();
 		}
 

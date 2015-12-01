@@ -1,4 +1,5 @@
 base_type int [byte_size = 4, encoding = 5 /* signed */ ];
+base_type unsigned\ int [byte_size = 4, encoding = 7 /* unsigned */ ];
 typedef new_int : int;
 structure_type newstruct { member : int; member : (array_type [type = int] {}); };
 structure_type newunion { member : newstruct; member : (array_type [type = unsigned\ int] {}); };
