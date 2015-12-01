@@ -26,33 +26,27 @@ using antlr::tree::Tree;
 class ident_not_found : public exception 
 {
 public:
-	 string ident;
-	 
-	 ident_not_found(string ident) : ident(ident) {}
+	string ident;
+	
+	ident_not_found(string ident) : ident(ident) {}
 
-	 virtual const char *what() const throw() {
-		  return ident.c_str();
-	 }
+	virtual const char *what() const throw() {
+		return ident.c_str();
+	}
 };
-	 
+
 
 template <typename T> inline T node_text_to(Tree *node) {
-	 // FIXME, brittle hex detection etc?
-	 
-	 string text = CCP(GET_TEXT(node));
-	 bool is_hex = (text.substr(0, 2).compare(string("0x")) == 0);
-	 if (is_hex) {
-		  text = text.substr(2, string::npos);
-	 }
-	 std::istringstream is(text);
-	 if (is_hex) {
-		  is >> std::hex;
-	 } else {
-		  is >> std::dec;
-	 }
-	 T result;
-	 is >> result;
-	 return result;
+	// FIXME, brittle hex detection etc?
+	
+	string text = CCP(GET_TEXT(node));
+	bool is_hex = (text.substr(0, 2).compare(string("0x")) == 0);
+	if (is_hex) text = text.substr(2, string::npos);
+	std::istringstream is(text);
+	if (is_hex) is >> std::hex; else is >> std::dec;
+	T result;
+	is >> result;
+	return result;
 }
 
 namespace dwarfidl
@@ -62,98 +56,107 @@ namespace dwarfidl
 		Dwarf_Half attr,
 		const std::map<Tree *, iterator_base>& nested)
 	{
-		switch (GET_TYPE(d)) {
-		case TOKEN(DIE): {
-			/* nested DIE; we should already have created it */
-			auto found = nested.find(d);
-			assert(found != nested.end());
-			
-			return attribute_value(attribute_value::weak_ref(found->second.get_root(), 
+		switch (GET_TYPE(d))
+		{
+			case TOKEN(DIE): {
+				/* nested DIE; we should already have created it */
+				auto found = nested.find(d);
+				assert(found != nested.end());
+
+				return attribute_value(attribute_value::weak_ref(found->second.get_root(), 
 					found->second.offset_here(), false, 
 					context.offset_here(), attr));
-		} break;
-		case TOKEN(IDENTS): {
-			ostringstream os;
-			bool first = true;
-			FOR_ALL_CHILDREN(d) {
-				if (first) first = false;
-				else os << " ";
-				os << CCP(GET_TEXT(n));
-			}
-			string identifier = os.str();
-			
-			if (attr != DW_AT_name) {
-				/* unless we're naming something, resolve this ident */
-				std::vector<string> name(1, identifier);//unescape_ident(CCP(GET_TEXT(d))));
-				auto found = context.root().scoped_resolve(context,
-					name.begin(), name.end());
-				if (!found || found.tag_here() == 0 || found.offset_here() == 0) {
-					 throw ident_not_found(identifier);
-				}				
-				auto val = attribute_value(attribute_value::weak_ref(found.get_root(), 
-						found.offset_here(), true, 
-						context.offset_here(), attr));
-				return val;
-			}
-			else {
-				//string name = unescape_ident(CCP(GET_TEXT(d)));
-				return attribute_value(identifier);
-			}
-		} break;
-		case TOKEN(INT): {
-			return attribute_value(static_cast<Dwarf_Unsigned>(node_text_to<unsigned int>(d)));
-		} break;
-		case TOKEN(ABSOLUTE_OFFSET): {
-			INIT;
-			BIND2(d, addr_node);
-			unsigned int off = node_text_to<unsigned int>(addr_node);
-			assert(off != 0);
-			return attribute_value(attribute_value::weak_ref(context.get_root(), off, true, context.offset_here(), attr));
-		} break;
-		case TOKEN(STRING_LIT): {
-			string text = string(CCP(GET_TEXT(d)));
-			return attribute_value(text);
-		} break;
-		case TOKEN(KEYWORD_TRUE): {
-			return attribute_value(static_cast<Dwarf_Bool>(1));
-		} break;
-		case TOKEN(KEYWORD_FALSE): {
-			return attribute_value(static_cast<Dwarf_Bool>(0));
-		} break;
-		case TOKEN(OPCODE_LIST): {
-			loc_expr *expr = new loc_expr;
-			FOR_ALL_CHILDREN(d) {
-				assert(GET_TYPE(n) == TOKEN(OPCODE));
+			} break;
+			case TOKEN(IDENTS): {
+				ostringstream os;
+				bool first = true;
+				FOR_ALL_CHILDREN(d)
+				{
+					if (first) first = false;
+					else os << " ";
+					os << CCP(GET_TEXT(n));
+				}
+				string identifier = os.str();
+
+				if (attr != DW_AT_name) 
+				{
+					/* unless we're naming something, resolve this ident */
+					std::vector<string> name(1, identifier);//unescape_ident(CCP(GET_TEXT(d))));
+					auto found = context.root().scoped_resolve(context,
+						name.begin(), name.end());
+					if (!found || found.tag_here() == 0 || found.offset_here() == 0) 
+					{
+						throw ident_not_found(identifier);
+					}
+					auto val = attribute_value(attribute_value::weak_ref(found.get_root(), 
+							found.offset_here(), true, 
+							context.offset_here(), attr));
+					return val;
+				}
+				else
+				{
+					//string name = unescape_ident(CCP(GET_TEXT(d)));
+					return attribute_value(identifier);
+				}
+			} break;
+			case TOKEN(INT): {
+				return attribute_value(static_cast<Dwarf_Unsigned>(node_text_to<unsigned int>(d)));
+			} break;
+			case TOKEN(ABSOLUTE_OFFSET):{
 				INIT;
-				auto child_count = GET_CHILD_COUNT(n);
-				Dwarf_Loc op;
-				assert (child_count >= 1 && child_count <= 3);
-				if (child_count >= 1) {
-					BIND2(n, opcode);
-					auto opcode_str = string("DW_OP_") + string(CCP(GET_TEXT(opcode)));
-					op.lr_atom = DEFAULT_DWARF_SPEC.op_for_name(opcode_str.c_str());
-					if (child_count >= 2) {
-						BIND2(n, arg1);
-						op.lr_number = node_text_to<unsigned int>(arg1);
-						if (child_count >= 3) {
-							BIND2(n, arg2);
-							op.lr_number2 = node_text_to<unsigned int>(arg2);
+				BIND2(d, addr_node);
+				unsigned int off = node_text_to<unsigned int>(addr_node);
+				assert(off != 0);
+				return attribute_value(attribute_value::weak_ref(context.get_root(), off, true, context.offset_here(), attr));
+			} break;
+			case TOKEN(STRING_LIT): {
+				string text = string(CCP(GET_TEXT(d)));
+				return attribute_value(text);
+			} break;
+			case TOKEN(KEYWORD_TRUE): {
+				return attribute_value(static_cast<Dwarf_Bool>(1));
+			} break;
+			case TOKEN(KEYWORD_FALSE): {
+				return attribute_value(static_cast<Dwarf_Bool>(0));
+			} break;
+			case TOKEN(OPCODE_LIST): {
+				loc_expr *expr = new loc_expr;
+				FOR_ALL_CHILDREN(d)
+				{
+					assert(GET_TYPE(n) == TOKEN(OPCODE));
+					INIT;
+					auto child_count = GET_CHILD_COUNT(n);
+					Dwarf_Loc op;
+					assert (child_count >= 1 && child_count <= 3);
+					if (child_count >= 1)
+					{
+						BIND2(n, opcode);
+						auto opcode_str = string("DW_OP_") + string(CCP(GET_TEXT(opcode)));
+						op.lr_atom = DEFAULT_DWARF_SPEC.op_for_name(opcode_str.c_str());
+						if (child_count >= 2)
+						{
+							BIND2(n, arg1);
+							op.lr_number = node_text_to<unsigned int>(arg1);
+							if (child_count >= 3)
+							{
+								BIND2(n, arg2);
+								op.lr_number2 = node_text_to<unsigned int>(arg2);
+							}
 						}
 					}
+					expr->push_back(op);
 				}
-				expr->push_back(op);
-			}
-			return attribute_value(expr);
-		} break;
-		default:  // FIXME: support more
-			assert(false);
+				return attribute_value(expr);
+			} break;
+			default:  // FIXME: support more
+				assert(false);
 		}
 	}
-	 
-	 iterator_base create_one_die(const iterator_base& parent, Tree *d,
+	
+	iterator_base create_one_die(const iterator_base& parent, Tree *d,
 								  vector<pair<const iterator_base&, Tree*> > &postpone,
 								  const std::map<Tree *, iterator_base>& nested /* = ... */)
-	 {
+	{
 		INIT;
 		BIND2(d, tag_keyword);
 		BIND3(d, attrs, ATTRS);
@@ -192,44 +195,42 @@ namespace dwarfidl
 			
 			Dwarf_Half attrnum = created.spec_here().attr_for_name(("DW_AT_" + to_lower_copy(attrstr)).c_str());
 			try {
-				 encap::attribute_value v = make_attribute_value(value, created, attrnum, nested);
-				 // FIXME HACK
-				 if (attrnum == DW_AT_type) {
-					  if (v.is_address()) {
-						   cerr << "checking addr != 0..." << endl;
-						   assert(v.get_address().addr != 0);
-					  }
-					  if (v.is_ref()) {
-						   cerr << "checking ref != 0..." << endl;
-						   assert(v.get_ref().off != 0);
-					  }
-				 }
-				 
-				 
-				 dynamic_cast<core::in_memory_abstract_die&>(created.dereference())
-					  .attrs(opt<root_die&>())
-					  .insert(make_pair(attrnum, v));
-			
+				encap::attribute_value v = make_attribute_value(value, created, attrnum, nested);
+				// FIXME HACK
+				if (attrnum == DW_AT_type) 
+				{
+					if (v.is_address()) 
+					{
+						cerr << "checking addr != 0..." << endl;
+						assert(v.get_address().addr != 0);
+					}
+					if (v.is_ref())
+					{
+						cerr << "checking ref != 0..." << endl;
+						assert(v.get_ref().off != 0);
+					}
+				}
+				
+				dynamic_cast<core::in_memory_abstract_die&>(created.dereference())
+					.attrs(opt<root_die&>())
+					.insert(make_pair(attrnum, v));
 			} catch (ident_not_found const &e) {
-				 cerr << "Ident not found: '" << e.what() << "', postponing to next pass" << endl;
-				 postpone.push_back(pair<const iterator_base&, Tree*>(parent, d));
-				 return parent.root().end();
+				cerr << "Ident not found: '" << e.what() << "', postponing to next pass" << endl;
+				postpone.push_back(pair<const iterator_base&, Tree*>(parent, d));
+				return parent.root().end();
 			}
 		}
-		
-			
 
-		
 		if (getenv("DEBUG_CC")) {
-			 cerr << "Created DIE: ";
-			 created.print_with_attrs(cerr);
-			 //print_type_die(cerr, created);
-			 cerr << endl;
+			cerr << "Created DIE: ";
+			created.print_with_attrs(cerr);
+			//print_type_die(cerr, created);
+			cerr << endl;
 		}
 		return created;
 	}
 	
-	 iterator_base create_one_die_with_children(const iterator_base& parent,
+	iterator_base create_one_die_with_children(const iterator_base& parent,
 												Tree *d,
 												vector<pair<const iterator_base&, Tree*> > &postpone)
 	{
@@ -253,7 +254,7 @@ namespace dwarfidl
 					case TOKEN(DIE): {
 						/* It's an inline DIE: we need to find a matching DIE or create it.
 						 * If we create it, create it as a sibling */
-						 iterator_base sub_die = find_or_create_die(parent, value, postpone);
+						iterator_base sub_die = find_or_create_die(parent, value, postpone);
 						nested[value] = sub_die;
 					} break;
 					case TOKEN(IDENT): {
@@ -285,18 +286,18 @@ namespace dwarfidl
 		
 		FOR_ALL_CHILDREN(children)
 		{
-			 create_one_die_with_children(created, n, postpone);
+			create_one_die_with_children(created, n, postpone);
 		}
 		
 		return created;
 	}
 
-	 iterator_base find_or_create_die(const iterator_base& parent, Tree *ast, std::vector<std::pair<const iterator_base&, antlr::tree::Tree*> > &postpone)
+	iterator_base find_or_create_die(const iterator_base& parent, Tree *ast, std::vector<std::pair<const iterator_base&, antlr::tree::Tree*> > &postpone)
 	{
 		/* Sometimes we can search for an existing DIE. But currently we blindly
 		 * re-create DIEs that might already be existing. */
 		// auto found = parent.root().scoped_resolve(
-		 return create_one_die_with_children(parent, ast, postpone);
+		return create_one_die_with_children(parent, ast, postpone);
 	}
 
 	iterator_base create_dies(Tree *ast) {
@@ -325,14 +326,17 @@ namespace dwarfidl
 			SELECT_ONLY(DIE);
 			INIT;
 			BIND2(n, tag_keyword);
-			if (string(CCP(GET_TEXT(tag_keyword))).compare("compile_unit") == 0) {
+			if (string(CCP(GET_TEXT(tag_keyword))).compare("compile_unit") == 0)
+			{
 				// We are a compilation unit, continue
 				 auto created = create_one_die_with_children(parent, n, postpone);
 				if (!first_created) first_created = created;
-			} else {
+			}
+			else
+			{
 				// Not a compilation unit, need to add to the dummy one because
 				// having one is expected by lots of libdwarfpp
-				 auto created = create_one_die_with_children(dummy_cu, n, postpone);
+				auto created = create_one_die_with_children(dummy_cu, n, postpone);
 				if (!first_created) first_created = created;
 			}
 			if (getenv("DEBUG_CC")) cerr << "Created one DIE and its children; we now have: " << endl << parent.root();
@@ -381,7 +385,7 @@ namespace dwarfidl
 
 		iterator_base first_created = create_dies(parent, tree);
 
-		// if (getenv("DEBUG_CC")) cerr << "Created some more stuff; whole tree is now: " << endl << parent.get_root();
+		if (getenv("DEBUG_CC")) cerr << "Created some more stuff; whole tree is now: " << endl << parent.get_root();
 		
 		return first_created;
 	}
