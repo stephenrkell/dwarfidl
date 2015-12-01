@@ -78,4 +78,4 @@ PKG_CHECK_MODULES([LIBANTLR3CXX], [libantlr3cxx])
 PKG_CHECK_MODULES([LIBDWARFPP], [libdwarfpp])
 PKG_CHECK_MODULES([LIBCXXGEN], [libcxxgen])
 
-AC_OUTPUT([Makefile dwarfidl.pc])
+AC_OUTPUT([Makefile dwarfidl.pc config.mk])
