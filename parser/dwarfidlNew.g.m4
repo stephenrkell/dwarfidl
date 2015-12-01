@@ -401,21 +401,21 @@ subprogram_arg
 	;
 
 subprogram_die
-	: offset? 'subprogram' die_name? ((OPEN (args+=subprogram_arg (COMMA args+=subprogram_arg)*)? CLOSE ('->' die_type)?)| COLON die_type)? attr_list? (OPEN_BRACE die* CLOSE_BRACE)? SEMICOLON
+	: offset? 'subprogram' die_name? ((OPEN (args+=subprogram_arg (COMMA args+=subprogram_arg)*)? CLOSE ('->' die_type)?)| COLON die_type)? attr_list? (OPEN_BRACE (die SEMICOLON)* CLOSE_BRACE)?
 		-> ^(DIE KEYWORD_TAG["subprogram"] ^(ATTRS die_name? die_type? attr_list?) ^(CHILDREN $args * die*) offset?)
 	;
 
-other_die : offset? die_tag die_name? (COLON die_type)? attr_list? (OPEN_BRACE die* CLOSE_BRACE)? SEMICOLON
+other_die : offset? die_tag die_name? (COLON die_type)? attr_list? (OPEN_BRACE (die SEMICOLON)* CLOSE_BRACE)?
 		-> ^(DIE die_tag ^(ATTRS die_name? die_type? attr_list?) ^(CHILDREN die*) offset?)
 	;
 
 toplevel_function
- : KEYWORD_FOOTPRINT_FUNCTION function_definition SEMICOLON
+ : KEYWORD_FOOTPRINT_FUNCTION function_definition
 		-> function_definition;
 
 die : subprogram_die | other_die | toplevel_function;
 
-toplevel : die* -> ^(DIES die*);
+toplevel : (die SEMICOLON)* -> ^(DIES die*);
 
 expression : union_expression;
 
