@@ -1,18 +1,18 @@
-default: src printer lib #test
+default: src.build printer.build lib.build #test
 
-.PHONY: parser
-parser:
+.PHONY: parser.build
+parser.build:
 	$(MAKE) -C parser
 
-.PHONY: src
-src: parser
+.PHONY: src.build
+src.build: parser.build
 	$(MAKE) -C src
 
-.PHONY: printer
-printer: src lib
+.PHONY: printer.build
+printer.build: src.build lib.build
 	$(MAKE) -C printer
 
-lib: src
+lib.build: src.build
 	mkdir -p lib && cd lib && ln -sf ../src/libdwarfidl.a ../src/libdwarfidl.so .
 
 .PHONY: clean
