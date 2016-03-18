@@ -4,9 +4,9 @@
 #include <fstream>
 #include <string>
 
-#include "dwarfidl/parser_includes.h"
+#include "lang.hpp"
 
-#include "dwarfidl/create.hpp"
+#include "create.hpp"
 #include "dwarfprint.hpp"
 
 typedef ANTLR3_TOKEN_SOURCE TokenSource;
