@@ -1,3 +1,12 @@
+/* Because we're in-tree, when we're built we haven't yet copied 
+ * the generated header files into the include directory. So the 
+ * include path is a bit different. */
+#ifndef LEXER_INCLUDE
+#define LEXER_INCLUDE "dwarfidlNewCLexer.h"
+#endif
+#ifndef PARSER_INCLUDE
+#define PARSER_INCLUDE "dwarfidlNewCParser.h"
+#endif
 #include "dwarfidl/lang.hpp"
 
 using std::string;
