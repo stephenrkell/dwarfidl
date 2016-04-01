@@ -20,7 +20,6 @@
 #include <cxxgen/tokens.hpp>
 #include <cxxgen/cxx_compiler.hpp>
 #include <dwarfpp/attr.hpp>
-#include <dwarfpp/encap.hpp>
 #include <dwarfpp/lib.hpp>
 #include <fileno.hpp>
 

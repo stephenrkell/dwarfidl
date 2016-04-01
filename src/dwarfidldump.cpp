@@ -9,7 +9,6 @@
 #include <boost/algorithm/string.hpp>
 
 #include <srk31/indenting_ostream.hpp>
-#include <dwarfpp/encap.hpp>
 #include "dwarfidl/cxx_model.hpp"
 #include "print.hpp"
 #include <srk31/algorithm.hpp>
