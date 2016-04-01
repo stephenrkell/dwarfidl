@@ -15,7 +15,14 @@ AM_MAINTAINER_MODE
 AC_PROG_CXX
 
 AX_CXX_COMPILE_STDCXX_11
+
+# For libantlr3c, there's no pkg-config, so we just use CPPFLAGS and LDFLAGS
+# to pass the configuration. So we need to make sure that those variables,
+# active at configure time, are passed through.
 export CXXFLAGS
+export CPPFLAGS
+export LDFLAGS
+export ANTLR_M4_PATH
 
 AC_CHECK_HEADER_STDBOOL
 AC_C_INLINE
