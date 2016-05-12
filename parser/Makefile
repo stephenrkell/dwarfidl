@@ -15,10 +15,10 @@ LDLIBS += -lantlr3c
 
 default: all
 
-dwarfidlSimpleCParser.c dwarfidlSimpleCLexer.c \
-dwarfidlNewCParser.c dwarfidlNewCParser.c \
+dwarfidlSimpleCParser.c dwarfidlSimpleCLexer.c dwarfidlSimpleCParser.h dwarfidlSimpleCLexer.h \
+dwarfidlNewCParser.c dwarfidlNewCParser.c dwarfidlNewCParser.h dwarfidlNewCParser.h \
 dwarfidlSimplePyParser.py dwarfidlSimplePyLexer.py \
-dwarfidlNewPyParser.py dwarfidlNewPyParser.py \
+dwarfidlNewPyParser.py dwarfidlNewPyLexer.py \
 : sources
 
 # We have to ask the Makerules to build both the sources *and*
