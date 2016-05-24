@@ -22,23 +22,7 @@ src_libdwarfidl_la_LIBADD = -lantlr3c -lboost_filesystem -lboost_regex -lboost_s
 src_libdwarfidl_la_CFLAGS = $(AM_CFLAGS)
 src_libdwarfidl_la_CXXFLAGS = $(AM_CXXFLAGS)
 
-SUBDIRS = parser
-
-all: include/dwarfidl/dwarfidlNewCLexer.h include/dwarfidl/dwarfidlNewCParser.h
-
-include/dwarfidl/dwarfidlNewCLexer.h: parser
-	cd include/dwarfidl && ln -sf ../../parser/dwarfidlNewCLexer.h .
-
-include/dwarfidl/dwarfidlNewCParser.h: parser
-	cd include/dwarfidl && ln -sf ../../parser/dwarfidlNewCParser.h .
-
-lib/libdwarfidl.so: $(lib_LTLIBRARIES)
-	mkdir -p lib && cd lib && ln -sf ../src/.libs/libdwarfidl.so .
-
-lib/libdwarfidl.so.0: $(lib_LTLIBRARIES)
-	mkdir -p lib && cd lib && ln -sf ../src/.libs/libdwarfidl.so.0 .
-
-all: lib/libdwarfidl.so lib/libdwarfidl.so.0
+SUBDIRS = parser include . lib
 
 bin_PROGRAMS = src/dwarfidldump src/dwarfhpp src/dwarf-ocaml-ctypesgen
 
