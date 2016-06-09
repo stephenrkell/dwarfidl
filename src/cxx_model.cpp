@@ -175,9 +175,9 @@ namespace tool {
 	pair<string, bool>
 	cxx_generator_from_dwarf::cxx_declarator_from_type_die(
 		iterator_df<type_die> p_d, 
-		optional<const string&> infix_typedef_name/*= optional<const std::string&>()*/,
+		optional<string> infix_typedef_name/*= optional<string>()*/,
 		bool use_friendly_names /*= true*/,  
-		optional<const string&> extra_prefix /* = optional<const string&>() */,
+		optional<string> extra_prefix /* = optional<string>() */,
 		bool use_struct_and_union_prefixes /* = true */ )
 	{
 		string name_prefix;
@@ -199,7 +199,7 @@ namespace tool {
 				assert(reference);
 				assert(reference->get_type());
 				auto declarator = cxx_declarator_from_type_die(
-						reference->get_type(), optional<const string&>(),
+						reference->get_type(), optional<string>(),
 						use_friendly_names, extra_prefix, 
 							use_struct_and_union_prefixes);
 				return make_pair(declarator.first + "&", declarator.second);
@@ -214,8 +214,8 @@ namespace tool {
 //						// we have a pointer to a subroutine type -- pass on the infix name
 						auto declarator = cxx_declarator_from_type_die(
 							pointer->get_type(), 
-							infix_typedef_name ? ("*" + *infix_typedef_name) : optional<const string&>(), 
-							use_friendly_names, extra_prefix, 
+							infix_typedef_name ? optional<string>() : "*" + *infix_typedef_name,
+							use_friendly_names, extra_prefix,
 							use_struct_and_union_prefixes);
 						if (!declarator.second) return make_pair(declarator.first + "*", false);
 						else return make_pair(declarator.first, true);
@@ -225,7 +225,7 @@ namespace tool {
 // 					{
 // 						// Q. Why don't we pass on the infix name here too?
 // 						auto declarator = cxx_declarator_from_type_die(
-// 							pointer->get_type(), optional<const string&>(),
+// 							pointer->get_type(), optional<string>(),
 // 							use_friendly_names, extra_prefix, 
 // 							use_struct_and_union_prefixes);
 // 						return make_pair(declarator.first + "*", declarator.second);
@@ -246,7 +246,7 @@ namespace tool {
 				ostringstream arrsize; 
 				if (array_size) arrsize << *array_size;
 				return make_pair(cxx_declarator_from_type_die(arr->get_type(), 
-							optional<const string&>(), 
+							optional<string>(), 
 							use_friendly_names, extra_prefix, 
 							use_struct_and_union_prefixes).first
 					+ " " + (infix_typedef_name ? *infix_typedef_name : "") + "[" 
@@ -260,7 +260,7 @@ namespace tool {
 				 = p_d.as_a<subroutine_type_die>();
 				s << (subroutine_type->get_type() 
 					? cxx_declarator_from_type_die(subroutine_type->get_type(),
-					optional<const string&>(), 
+					optional<string>(), 
 							use_friendly_names, extra_prefix, 
 							use_struct_and_union_prefixes
 					).first 
@@ -276,7 +276,7 @@ namespace tool {
 						case DW_TAG_formal_parameter:
 							s << cxx_declarator_from_type_die( 
 									i_child.as_a<formal_parameter_die>()->get_type(),
-										optional<const string&>(), 
+										optional<string>(), 
 										use_friendly_names, extra_prefix, 
 										use_struct_and_union_prefixes
 									).first;
@@ -493,7 +493,7 @@ namespace tool {
 	pair<string, bool>
 	cxx_generator_from_dwarf::name_for_type(
 		iterator_df<type_die> p_d, 
-		boost::optional<const string&> infix_typedef_name /*= none*/,
+		boost::optional<string> infix_typedef_name /*= none*/,
 		bool use_friendly_names/*= true*/)
 	{
 // 		try
@@ -708,7 +708,7 @@ namespace tool {
 
 		auto our_name_for_this_type = name_for_type(
 			p_d.as_a<type_die>(), 
-			0 /* no infix */, 
+			optional<string>() /* no infix */, 
 			false /* no friendly names*/);
 		assert(!our_name_for_this_type.second);
 
@@ -913,7 +913,7 @@ namespace tool {
 		auto declarator = name_for_type(member_type, name_to_use);
 		// (p_d.name_here())
 		//	? name_for_type(member_type, *p_d.name_here())
-		//	: name_for_type(member_type, optional<const string&>());
+		//	: name_for_type(member_type, optional<string>());
 		
 		out << protect_ident(declarator.first);
 		out	<< " ";

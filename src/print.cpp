@@ -256,7 +256,7 @@ namespace tool {
 			<< (i_d.name_here() ? " " + *i_d.name_here() : "")
 			<< " [";
 
-		encap::attribute_map attrs = i_d.dereference().copy_attrs(i_d.root());
+		encap::attribute_map attrs = i_d.dereference().copy_attrs();
 		for (auto i_a = attrs.begin(); i_a != attrs.end(); ++i_a)
 		{
 			if (i_a != attrs.begin()) out << ", ";

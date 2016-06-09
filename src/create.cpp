@@ -220,7 +220,7 @@ namespace dwarfidl
 				}
 				
 				dynamic_cast<core::in_memory_abstract_die&>(created.dereference())
-					.attrs(opt<root_die&>())
+					.attrs()
 					.insert(make_pair(attrnum, v));
 			} catch (ident_not_found const &e) {
 				cerr << "Ident not found: '" << e.what() << "', postponing to next pass" << endl;

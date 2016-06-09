@@ -120,9 +120,9 @@ public:
 	pair<string, bool>
 	cxx_declarator_from_type_die(
 		iterator_df<type_die> p_d, 
-		optional<const string&> infix_typedef_name = optional<const string&>(),
+		optional<string> infix_typedef_name = optional<string>(),
 		bool use_friendly_names = true,
-		optional<const string&> extra_prefix = optional<const string&>(),
+		optional<string> extra_prefix = optional<string>(),
 		bool use_struct_and_union_prefixes = true
 	);
 
@@ -138,7 +138,7 @@ public:
 	pair<string, bool>
 	name_for_type(
 		iterator_df<type_die> p_d, 
-		optional<const string&> infix_typedef_name = optional<const string&>(),
+		optional<string> infix_typedef_name = optional<string>(),
 		bool use_friendly_names = true);
 
 	string 
