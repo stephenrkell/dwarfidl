@@ -18,7 +18,7 @@ namespace dwarfidl
 {
 	using std::string;
 
-	string unescape_ident(const string& s);
+	string unescape_ident(const std::string& s);
 	string unescape_string_lit(const std::string& lit);
 }
 
