@@ -5,7 +5,7 @@ GRAMMAR_PATH ?= .
 
 -include $(THIS_MAKEFILE)/../config.mk
 
-ANTLR_M4_PATH ?= ../m4ntlr
+ANTLR_M4_PATH ?= ../contrib/m4ntlr
 ANTLR ?= java -classpath .:$(dir $(THIS_MAKEFILE))/../contrib/antlr-3.4-complete.jar:$(CLASSPATH) org.antlr.Tool
 export CLASSPATH ANTLR ANTLR_M4_PATH GRAMMAR_TOPLEVEL GRAMMAR_OPTIONS GRAMMAR_PATH
 
