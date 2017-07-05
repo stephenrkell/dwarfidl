@@ -156,19 +156,19 @@ namespace dwarf { namespace tool {
 					for (auto i_child = member_children.first;
 						i_child != member_children.second; ++i_child)
 					{
-						my_walk_type(i_child->find_type(), i_child.base().base(), pre_f, post_f , next_currently_walking);
+						my_walk_type(i_child->find_type(), i_child, pre_f, post_f , next_currently_walking);
 					}
 					// visit all inheritances
 					auto inheritance_children = t.as_a<with_data_members_die>().children().subseq_of<inheritance_die>();
 					for (auto i_child = inheritance_children.first;
 						i_child != inheritance_children.second; ++i_child)
 					{
-						 my_walk_type(i_child->find_type(), i_child.base().base(), pre_f, post_f , next_currently_walking);
+						 my_walk_type(i_child->find_type(), i_child, pre_f, post_f , next_currently_walking);
 					}
 
 					/*auto children_with_type = t.as_a<with_data_members_die>().children().subseq_of<with_type_describing_layout_die>();
 					for (auto i_child = children_with_type.first; i_child != children_with_type.second; i_child++) {
-						 my_walk_type(i_child->find_type(), i_child.base().base(), pre_f, post_f , next_currently_walking);
+						 my_walk_type(i_child->find_type(), i_child, pre_f, post_f , next_currently_walking);
 						 }*/
 					}
 				else if (t.is_a<subrange_type_die>())
@@ -191,12 +191,12 @@ namespace dwarf { namespace tool {
 					auto fps = sub_t.children().subseq_of<formal_parameter_die>();
 					for (auto i_fp = fps.first; i_fp != fps.second; ++i_fp)
 					{
-						my_walk_type(i_fp->find_type(), i_fp.base().base(), pre_f, post_f, next_currently_walking);
+						my_walk_type(i_fp->find_type(), i_fp, pre_f, post_f, next_currently_walking);
 					}
 					/*auto vars = sub_t.children().subseq_of<variable_die>();
 					for (auto i_fp = vars.first; i_fp != vars.second; ++i_fp)
 					{
-						my_walk_type(i_fp->find_type(), i_fp.base().base(), pre_f, post_f, next_currently_walking);
+						my_walk_type(i_fp->find_type(), i_fp, pre_f, post_f, next_currently_walking);
 						}*/
 				
 				}
@@ -213,9 +213,9 @@ namespace dwarf { namespace tool {
 																										 iterator_df<program_element_die> reason){
 						 auto children = t.children();
 						 for (auto iter = children.first; iter != children.second; iter++) {
-							  auto child_type = iter.base().as_a<type_die>();
-							  auto child_with_type = iter.base().as_a<with_type_describing_layout_die>();
-							  auto child_returning_type = iter.base().as_a<type_describing_subprogram_die>();
+							  auto child_type = iter.as_a<type_die>();
+							  auto child_with_type = iter.as_a<with_type_describing_layout_die>();
+							  auto child_returning_type = iter.as_a<type_describing_subprogram_die>();
 							  if (child_type) {
 								   my_walk_type(child_type, t, pre_f, post_f, next_currently_walking);
 							  } else if (child_with_type) {
@@ -254,10 +254,10 @@ gather_interface_dies(root_die& root,
 	/* FIXME: it needn't be just grandchildren. */
 	for (auto i_d = std::move(toplevel_seq.first); i_d != toplevel_seq.second; ++i_d)
 	{
-		if (pred(i_d.base().base()))
+		if (pred(i_d))
 		{
 			// looks like a goer -- add it to the objs
-			out.insert(i_d.base().base());
+			out.insert(i_d);
 			
 			/* utility that will come in handy */
 			auto add_all_types = [&types, &root](iterator_df<type_die> outer_t) {
@@ -302,14 +302,14 @@ gather_interface_dies(root_die& root,
 			
 			/* Also output everything that this depends on. We have to case-split
 			 * for now. */
-			if (i_d.base().base().is_a<variable_die>())
+			if (i_d.is_a<variable_die>())
 			{
-				add_all_types(i_d.base().base().as_a<variable_die>()->get_type());
+				add_all_types(i_d.as_a<variable_die>()->get_type());
 			}
-			else if (i_d.base().base().is_a<type_die>())
+			else if (i_d.is_a<type_die>())
 			{
 				/* Just walk it. */
-				add_all_types(i_d.base().base().as_a<type_die>());
+				add_all_types(i_d.as_a<type_die>());
 			}
 		} // end if pred
 	} // end for

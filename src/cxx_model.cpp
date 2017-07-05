@@ -502,7 +502,7 @@ namespace tool {
 				infix_typedef_name,
 				use_friendly_names);
 // 		} 
-// 		catch (dwarf::lib::Not_supported)
+// 		catch (dwarf::expr::Not_supported)
 // 		{
 // 			// HACK around this strange (const (array)) case
 // 			if (p_d.tag_here() == DW_TAG_const_type
@@ -632,13 +632,13 @@ namespace tool {
 			
 			if (i_fp->get_type())
 			{
-				auto declarator = (i_fp.base().base().name_here())
-					? name_for_type(i_fp->get_type(), *i_fp.base().base().name_here())
+				auto declarator = (i_fp.name_here())
+					? name_for_type(i_fp->get_type(), *i_fp.name_here())
 					: name_for_type(i_fp->get_type());
 				out << declarator.first;
 				if (!declarator.second) out << " " 
-					<< (i_fp.base().base().name_here() ? *i_fp.base().base().name_here() : "");
-				else out << "void *" << (i_fp.base().base().name_here() ? *i_fp.base().base().name_here() : "");
+					<< (i_fp.name_here() ? *i_fp.name_here() : "");
+				else out << "void *" << (i_fp.name_here() ? *i_fp.name_here() : "");
 				written_an_arg = true;
 			}
 		}
@@ -859,7 +859,7 @@ namespace tool {
 		auto i = ms.first;
 		auto prev_i = ms.second; // initially
 		while (i != ms.second
-			&& i.base().base().offset_here() != p_d.offset_here())
+			&& i.offset_here() != p_d.offset_here())
 		{ prev_i = i; ++i; }
 		
 		// now i points to us, and prev_i to our predecessor
@@ -869,7 +869,7 @@ namespace tool {
 		if (prev_i == ms.second) cur_offset = 0;
 		else 
 		{
-			auto prev_member = prev_i.base().base().as_a<member_die>();
+			auto prev_member = prev_i.as_a<member_die>();
 			assert(prev_member->get_type());
 
 			if (prev_member->get_data_member_location())
@@ -885,7 +885,7 @@ namespace tool {
 				}
 				else
 				{
-					cur_offset = evaluator(
+					cur_offset = dwarf::expr::evaluator(
 						prev_member->get_data_member_location()->at(0), 
 						p_d.spec_here(),
 						stack<Dwarf_Unsigned>(
@@ -924,7 +924,7 @@ namespace tool {
 
 		if (p_d->get_data_member_location() && p_d->get_data_member_location()->size() == 1)
 		{
-			Dwarf_Unsigned target_offset = evaluator(
+			Dwarf_Unsigned target_offset = dwarf::expr::evaluator(
 				p_d->get_data_member_location()->at(0), 
 				p_d.spec_here(),
 				stack<Dwarf_Unsigned>(
@@ -1149,7 +1149,7 @@ namespace tool {
 				create_ident_for_anonymous_die(p_d)
 			);
 		}
-		catch (dwarf::lib::Not_supported)
+		catch (dwarf::expr::Not_supported)
 		{
 			/* This happens when the debug info contains (broken) 
 			 * qualified types that can't be expressed in a single declarator,
@@ -1174,7 +1174,7 @@ namespace tool {
 		
 		// FIXME
 		auto parent = p_d.parent().as_a<enumeration_type_die>();
-		if (parent.children().subseq_of<enumeration_type_die>().first.base().base() != p_d)
+		if (parent.children().subseq_of<enumeration_type_die>().first != p_d)
 		{ out << ", " << endl; }
 		out << protect_ident(*p_d.name_here());
 	}
@@ -1195,7 +1195,7 @@ namespace tool {
 				create_ident_for_anonymous_die(p_d)
 			);
 		}
-		catch (dwarf::lib::Not_supported)
+		catch (dwarf::expr::Not_supported)
 		{
 			/* See note for const_type above. */
 

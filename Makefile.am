@@ -18,7 +18,7 @@ dwarfidl_include_HEADERS = include/dwarfidl/create.hpp include/dwarfidl/cxx_mode
 
 lib_LTLIBRARIES = src/libdwarfidl.la
 src_libdwarfidl_la_SOURCES = src/cxx_model.cpp src/dwarfidl_cxx_target.cpp src/dwarf_interface_walk.cpp src/create.cpp src/lang.cpp src/print.cpp parser/dwarfidlNewCLexer.c parser/dwarfidlNewCParser.c
-src_libdwarfidl_la_LIBADD = -lantlr3c -lboost_filesystem -lboost_regex -lboost_system -lboost_serialization $(LIBANTLR3CXX_LIBS) $(LIBCXXGEN_LIBS) $(LIBDWARFPP_LIBS) $(LIBSRK31CXX_LIBS) $(LIBCXXFILENO_LIBS)
+src_libdwarfidl_la_LIBADD = -lantlr3c -lboost_filesystem -lboost_regex -lboost_system -lboost_serialization $(LIBANTLR3CXX_LIBS) $(LIBCXXGEN_LIBS) $(LIBDWARFPP_LIBS) $(LIBSRK31CXX_LIBS) $(LIBCXXFILENO_LIBS) -lz
 src_libdwarfidl_la_CFLAGS = $(AM_CFLAGS)
 src_libdwarfidl_la_CXXFLAGS = $(AM_CXXFLAGS)
 

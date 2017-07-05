@@ -475,14 +475,14 @@ int main(int argc, char **argv)
 						for (auto i_memb = members.first; i_memb != members.second; ++i_memb)
 						{
 							string field_name = reified_name
-								 + "_" + ocaml_ident(*i_memb.base().base().name_here());
+								 + "_" + ocaml_ident(*i_memb.name_here());
 							//opt<string> opt_field_type_name = reified_type_name(
 							//	i_memb->find_type());
 							auto memb_t = i_memb->find_type();
 							assert(emitted.find(memb_t) != emitted.end()); // since we are post-emitting
 							string field_type_name = reified_type_name(memb_t);
 							cout << "let " << field_name << " = field " << reified_name 
-								<< " \"" << ocaml_ident(*i_memb.base().base().name_here()) << "\" " 
+								<< " \"" << ocaml_ident(*i_memb.name_here()) << "\" " 
 								<< field_type_name << endl;
 						}
 						cout << "let () = seal " << reified_name << endl;

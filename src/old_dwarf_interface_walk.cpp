@@ -110,14 +110,14 @@ namespace dwarf {
 		  // 				 for (auto i_child = member_children.first;
 		  // 					  i_child != member_children.second; ++i_child)
 		  // 				 {
-		  // 					  my_walk_type(i_child->find_type(), i_child.base().base(), pre_f, post_f , next_currently_walking);
+		  // 					  my_walk_type(i_child->find_type(), i_child, pre_f, post_f , next_currently_walking);
 		  // 				 }
 		  // 				 // visit all inheritances
 		  // 				 auto inheritance_children = t.as_a<with_data_members_die>().children().subseq_of<inheritance_die>();
 		  // 				 for (auto i_child = inheritance_children.first;
 		  // 					  i_child != inheritance_children.second; ++i_child)
 		  // 				 {
-		  // 					  my_walk_type(i_child->find_type(), i_child.base().base(), pre_f, post_f , next_currently_walking);
+		  // 					  my_walk_type(i_child->find_type(), i_child, pre_f, post_f , next_currently_walking);
 		  // 				 }
 		  // 			}
 		  // 			else if (t.is_a<subrange_type_die>())
@@ -140,7 +140,7 @@ namespace dwarf {
 		  // 				 auto fps = sub_t.children().subseq_of<formal_parameter_die>();
 		  // 				 for (auto i_fp = fps.first; i_fp != fps.second; ++i_fp)
 		  // 				 {
-		  // 					  my_walk_type(i_fp->find_type(), i_fp.base().base(), pre_f, post_f, next_currently_walking);
+		  // 					  my_walk_type(i_fp->find_type(), i_fp, pre_f, post_f, next_currently_walking);
 		  // 				 }
 		  // 			}
 		  // 			else
@@ -216,16 +216,16 @@ namespace dwarf {
 						 find_types(i);
 						 // auto param_children = die.children_here().subseq_of<formal_parameter_die>();
 						 // for (auto iter = param_children.first; iter != param_children.second; iter++) {
-						 // 	  find_types(iter.base().base());
+						 // 	  find_types(iter);
 						 // }
 					} else if (with_members_die) {
 						 // auto member_children = die.children_here().subseq_of<member_die>();
 						 // auto inheritance_children = die.children_here().subseq_of<inheritance_die>();
 						 // for (auto iter = member_children.first; iter != member_children.second; iter++) {
-						 // 	  find_types(iter.base().base());
+						 // 	  find_types(iter);
 						 // }
 						 // for (auto iter = inheritance_children.first; iter != inheritance_children.second; iter++) {
-						 // 	  find_types(iter.base().base());
+						 // 	  find_types(iter);
 						 // }
 						 
 					}
@@ -240,7 +240,7 @@ namespace dwarf {
 					}
 			   };
 			   
-			   find_wanted(root.children().first.base().base(), root.children().second.base().base());
+			   find_wanted(root.children().first, root.children().second);
 			   
 			   cerr << "===== WANTED =====" << endl;
 			   for (auto iter = wanted.begin(); iter != wanted.end(); iter++) {
@@ -270,9 +270,9 @@ namespace dwarf {
 
 // 						 if (!iter) continue;
 						 
-// 						 bool was_chosen = pred(iter.base());
+// 						 bool was_chosen = pred(iter);
 
-// 						 if (pred(iter.base())) {
+// 						 if (pred(iter)) {
 							  
 // 						 auto actual_type_die = iter.as_a<type_die>();
 // 						 auto chain_die = iter.as_a<type_chain_die>();
@@ -320,7 +320,7 @@ namespace dwarf {
 			   
 // 			   for (auto i_d = std::move(toplevel_seq.first); i_d != toplevel_seq.second; ++i_d)
 // 			   {
-// 					if (pred(i_d.base().base()))
+// 					if (pred(i_d))
 // 					{
 // 						 auto add_all_types = [&types, &root](iterator_df<type_die> outer_t) {
 // 							  my_walk_type(outer_t, iterator_base::END,
@@ -416,8 +416,8 @@ namespace dwarf {
 				  
 // 						 };
 
-// 						 out.insert(i_d.base().base());
-// 						 process_types(i_d.base().base(), false);
+// 						 out.insert(i_d);
+// 						 process_types(i_d, false);
 			 
 			 
 // 					} // end if pred
