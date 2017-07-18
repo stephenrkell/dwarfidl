@@ -38,6 +38,7 @@ using dwarf::core::subprogram_die;
 using dwarf::core::subroutine_type_die;
 using dwarf::core::formal_parameter_die;
 
+using std::cerr;
 using std::vector;
 using std::pair;
 using std::map;
