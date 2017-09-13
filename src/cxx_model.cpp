@@ -120,7 +120,7 @@ namespace tool {
 		// we should check that we're a member_die or other non-CU-level thing
 		auto conflicting_toplevel_die = 
 			(p_d.name_here() && p_d.parent().tag_here() != DW_TAG_compile_unit) 
-				? p_d.root().find_visible_named_grandchild(*p_d.name_here())
+				? p_d.root().find_visible_grandchild_named(*p_d.name_here())
 				: iterator_base::END;
 		// if we get a conflict, we shouldn't be conflicting with ourselves
 		assert(!conflicting_toplevel_die || conflicting_toplevel_die != p_d);
