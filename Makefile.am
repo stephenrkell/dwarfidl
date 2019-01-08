@@ -27,15 +27,15 @@ SUBDIRS = parser include . lib
 bin_PROGRAMS = src/dwarfidldump src/dwarfhpp src/dwarf-ocaml-ctypesgen
 
 src_dwarfidldump_SOURCES = src/dwarfidldump.cpp src/print.cpp
-src_dwarfidldump_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -ldwarf -lelf
+src_dwarfidldump_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -lelf
 
 
 src_dwarfhpp_SOURCES = src/dwarfhpp.cpp
-src_dwarfhpp_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -ldwarf -lelf
+src_dwarfhpp_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -lelf
 
 
 src_dwarf_ocaml_ctypesgen_SOURCES = src/dwarf-ocaml-ctypesgen.cpp
-src_dwarf_ocaml_ctypesgen_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -ldwarf -lelf
+src_dwarf_ocaml_ctypesgen_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -lelf
 
 # pkg-config doesn't understand PKG_CXXFLAGS, but I'm buggered
 # if I'm going to have my Makefiles use _CFLAGS to mean _CXXFLAGS.
