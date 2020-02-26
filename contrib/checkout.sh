@@ -65,7 +65,7 @@ gen_makefile \
 "$( readlink -f libantlr3cxx )" \
 > $(dirname $0)/../src/makefile && \
 echo "CLASSPATH=.:${ANTLR34_PREFIX}/share/java/antlr-3.4-complete.jar:${STRINGTEMPLATE_PREFIX}/share/java/stringtemplate.jar:
-ANTLR_M4_PATH := $( readlink -f m4ntlr )
+M4NTLR_PATH := $( readlink -f "$(dirname $0)"/../contrib/m4ntlr )
 
 CFLAGS += -I${ANTLR34_PREFIX}
 LDFLAGS += -L${ANTLR34_PREFIX}/lib -Wl,-rpath,${ANTLR34_PREFIX}/lib
