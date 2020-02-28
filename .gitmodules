@@ -1,3 +1,12 @@
-[submodule "m4ntlr"]
-	path = m4ntlr
+[submodule "contrib/m4ntlr"]
+	path = contrib/m4ntlr
 	url = git://github.com/stephenrkell/m4ntlr.git
+[submodule "contrib/libantlr3c++"]
+	path = contrib/libantlr3c++
+	url = git://github.com/stephenrkell/libantlr3cxx.git
+[submodule "contrib/libcxxgen"]
+	path = contrib/libcxxgen
+	url = git://github.com/stephenrkell/libcxxgen.git
+[submodule "contrib/libdwarfpp"]
+	path = contrib/libdwarfpp
+	url = git://github.com/stephenrkell/libdwarfpp.git
