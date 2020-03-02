@@ -2,11 +2,11 @@ THIS_MAKEFILE := $(realpath $(lastword $(MAKEFILE_LIST)))
 CONTRIB_ROOT := $(realpath $(dir $(THIS_MAKEFILE)))
 
 default: env.sh config.mk build-libcxxgen \
-build-libantlr3c++ build-libantlr3c
+build-libantlr3c++ build-libantlr3c build-libdwarfpp
 
 .PHONY: clean default
 
-CONFIG_MK += include $$(dir $$(lastword $$(MAKEFILE_LIST)))/libdwarfpp/contrib/config.mk
+CONFIG_MK += include $(realpath $(dir $(lastword $(MAKEFILE_LIST))))/libdwarfpp/contrib/config.mk
 
 # ----------------------------antlr things
 antlr-3.4.tar.gz:
@@ -127,7 +127,7 @@ CONFIG_MK += \n\nenv.sh:\n\tprintf '"'"'$(foreach var,$(varlist),export $(var)="
 config.mk:
 	printf '$(CONFIG_MK)' > "$@" || (rm -f "$@"; false)
 
-env.sh: config.mk
+env.sh: config.mk build-libdwarfpp # because our config.mk includes libdwarfpp's
 	$(MAKE) -f "$<" "$@"
 
 clean::
