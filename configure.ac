@@ -1,6 +1,7 @@
 AC_CONFIG_MACRO_DIR([m4])
 AC_PREREQ([2.69])
 AC_INIT([dwarfidl], [0.1], [srk31@cl.cam.ac.uk])
+AC_PREFIX_DEFAULT(/usr/local)
 AC_CONFIG_SRCDIR([src/create.cpp])
 CFLAGS="-I$prefix/include $CFLAGS"
 CXXFLAGS="-I$prefix/include $CXXFLAGS"
