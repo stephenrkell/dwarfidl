@@ -24,11 +24,13 @@ src_libdwarfidl_la_CXXFLAGS = $(AM_CXXFLAGS)
 
 SUBDIRS = parser include . lib
 
-bin_PROGRAMS = src/dwarfidldump src/dwarfhpp src/dwarf-ocaml-ctypesgen
+bin_PROGRAMS = src/dwarfidldump src/dwarfhpp src/dwarf-ocaml-ctypesgen src/test_dwarfprint
 
 src_dwarfidldump_SOURCES = src/dwarfidldump.cpp src/print.cpp
 src_dwarfidldump_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -lelf
 
+src_test_dwarfprint_SOURCES = src/dwarfprint.cpp src/test_dwarfprint.cpp
+src_test_dwarfprint_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -lelf
 
 src_dwarfhpp_SOURCES = src/dwarfhpp.cpp
 src_dwarfhpp_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -lelf

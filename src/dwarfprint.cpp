@@ -201,7 +201,7 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 		name_printed = true;
 	}
 	
-	auto attrs = die_iter.copy_attrs(die_iter.get_root());
+	auto attrs = die_iter.copy_attrs();
 	auto &root = die_iter.get_root();
 
 	/* Convert the type offset into a name if possible. */
@@ -231,7 +231,7 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 		 }
 		 auto abstract_name = type_die.name_here();
 		 // Concretify (traverse typedefs etc)
-		 auto concrete_die = type_die->get_concrete_type(root);
+		 auto concrete_die = type_die->get_concrete_type();
 		 // Also dedup that. Just in case.
 		 if (concrete_die && types) {
 			  auto concrete_die_iter = types->find(concrete_die);
@@ -430,7 +430,7 @@ string dies_to_idl(set<iterator_base> dies, optional<type_set&> types) {
 	return ss.str();
 }
 
-void print_dies(ostream &s, set<iterator_base> dies, optional<type_set&> types) {
+void print_dies(std::ostream &s, set<iterator_base> dies, optional<type_set&> types) {
 	for (auto iter = dies.begin(); iter != dies.end(); iter++) {
 		 print_type_die(s, *iter, types);
 		 s << endl << endl;
