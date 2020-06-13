@@ -187,12 +187,12 @@ namespace tool {
 			// return the friendly compiler-determined name or not, depending on argument
 			case DW_TAG_base_type:
 				return make_pair(
-					((extra_prefix && !use_friendly_names) ? *extra_prefix : "")
+					((!!extra_prefix && !use_friendly_names) ? *extra_prefix : "")
 					+ local_name_for(p_d.as_a<base_type_die>(),
 						use_friendly_names),
 					false);
 			case DW_TAG_typedef:
-				return make_pair((extra_prefix ? *extra_prefix : "") + *p_d.name_here(), false);
+				return make_pair((!!extra_prefix ? *extra_prefix : "") + *p_d.name_here(), false);
 			case DW_TAG_reference_type: {
 				iterator_df<reference_type_die> reference 
 				 = p_d.as_a<reference_type_die>();
@@ -214,7 +214,7 @@ namespace tool {
 //						// we have a pointer to a subroutine type -- pass on the infix name
 						auto declarator = cxx_declarator_from_type_die(
 							pointer->get_type(), 
-							infix_typedef_name ? optional<string>() : "*" + *infix_typedef_name,
+							!infix_typedef_name ? optional<string>() : "*" + *infix_typedef_name,
 							use_friendly_names, extra_prefix,
 							use_struct_and_union_prefixes);
 						if (!declarator.second) return make_pair(declarator.first + "*", false);
@@ -249,10 +249,10 @@ namespace tool {
 							optional<string>(), 
 							use_friendly_names, extra_prefix, 
 							use_struct_and_union_prefixes).first
-					+ " " + (infix_typedef_name ? *infix_typedef_name : "") + "[" 
+					+ " " + (!!infix_typedef_name ? *infix_typedef_name : "") + "[" 
 					// add size, if we have a subrange type
 					+ arrsize.str()
-					+ "]", infix_typedef_name ? true : false);
+					+ "]", !!infix_typedef_name ? true : false);
 			}
 			case DW_TAG_subroutine_type: {
 				ostringstream s;
@@ -265,7 +265,7 @@ namespace tool {
 							use_struct_and_union_prefixes
 					).first 
 					: string("void "));
-				s << "(" << (infix_typedef_name ? *infix_typedef_name : "")
+				s << "(" << (!!infix_typedef_name ? *infix_typedef_name : "")
 					<< ")(";
 				
 				auto children = p_d.children();
@@ -309,7 +309,7 @@ namespace tool {
 			handle_named_type:
 			default:
 				return make_pair(
-					(extra_prefix ? *extra_prefix : "") + name_prefix + cxx_name_from_die(p_d),
+					(!!extra_prefix ? *extra_prefix : "") + name_prefix + cxx_name_from_die(p_d),
 					false);
 			handle_qualified_type: {
 				/* This is complicated by the fact that array types in C/C++ can't be qualified directly,

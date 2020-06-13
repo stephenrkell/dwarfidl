@@ -218,7 +218,7 @@ namespace dwarfidl
 						assert(v.get_ref().off != 0);
 					}
 				}
-				
+
 				dynamic_cast<core::in_memory_abstract_die&>(created.dereference())
 					.attrs()
 					.insert(make_pair(attrnum, v));

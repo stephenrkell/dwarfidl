@@ -300,11 +300,14 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 				 nullptr
 			};
 
+			bool skip_this = false;
 			for (unsigned int i = 0; drop_attrs[i] != nullptr; i++) {
 				 if (k.compare(drop_attrs[i]) == 0) {
-					  continue;
+					skip_this = true;
+					break;
 				 }
 			}
+			if (skip_this) continue;
 			
 			auto v = pair.second;
 			if (attrs_printed++ != 0) {

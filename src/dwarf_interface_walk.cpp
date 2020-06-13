@@ -254,8 +254,10 @@ gather_interface_dies(root_die& root,
 	/* FIXME: it needn't be just grandchildren. */
 	for (auto i_d = std::move(toplevel_seq.first); i_d != toplevel_seq.second; ++i_d)
 	{
+		std::cerr << "\rAt " << i_d.summary();
 		if (pred(i_d))
 		{
+			std::cerr << std::endl;
 			// looks like a goer -- add it to the objs
 			out.insert(i_d);
 			
