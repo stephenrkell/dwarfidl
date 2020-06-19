@@ -1,12 +1,13 @@
 THIS_MAKEFILE := $(lastword $(MAKEFILE_LIST))
+$(info THIS_MAKEFILE is $(THIS_MAKEFILE))
 GRAMMAR_TOPLEVEL ?= toplevel
 GRAMMAR_OPTIONS ?= output=AST
 GRAMMAR_PATH ?= .
 
--include $(THIS_MAKEFILE)/../config.mk
+-include $(realpath $(dir $(THIS_MAKEFILE)))/../config.mk
 
-M4NTLR_PATH ?= ../contrib/m4ntlr
-ANTLR ?= java -classpath .:$(dir $(THIS_MAKEFILE))/../contrib/antlr-3.4-complete.jar:$(CLASSPATH) org.antlr.Tool
+M4NTLR_PATH ?= $(dir $(THIS_MAKEFILE)))/../contrib/m4ntlr
+ANTLR ?= java -classpath .:$(ANTLR3_JAR):$(CLASSPATH) org.antlr.Tool
 export CLASSPATH ANTLR M4NTLR_PATH GRAMMAR_TOPLEVEL GRAMMAR_OPTIONS GRAMMAR_PATH
 
 CFLAGS += -fPIC -g

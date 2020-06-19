@@ -1,14 +1,7 @@
 AC_CONFIG_MACRO_DIR([m4])
 AC_PREREQ([2.69])
 AC_INIT([dwarfidl], [0.1], [srk31@cl.cam.ac.uk])
-AC_PREFIX_DEFAULT(/usr/local)
 AC_CONFIG_SRCDIR([src/create.cpp])
-CFLAGS="-I$prefix/include $CFLAGS"
-CXXFLAGS="-I$prefix/include $CXXFLAGS"
-CPPFLAGS="-I$prefix/include $CPPFLAGS"
-LDFLAGS="-L$prefix/lib $LDFLAGS"
-PKG_CONFIG_PATH="$prefix/lib/pkgconfig:$PKG_CONFIG_PATH"
-export CFLAGS CXXFLAGS LDFLAGS PKG_CONFIG_PATH
 LT_INIT
 AC_LANG([C++])
 AM_INIT_AUTOMAKE([foreign subdir-objects -Wno-portability])
@@ -24,9 +17,9 @@ export CXXFLAGS
 export CPPFLAGS
 export LDFLAGS
 AC_SUBST(M4NTLR_PATH, $M4NTLR_PATH)
-AC_SUBST(ANTLR, $ANTLR)
+AC_SUBST(ANTLR3_JAR, $ANTLR3_JAR)
 export M4NTLR_PATH
-export ANTLR
+export ANTLR3_JAR
 
 AC_CHECK_HEADER_STDBOOL
 AC_C_INLINE
@@ -39,7 +32,9 @@ OLD_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="-std=c++11 $CPPFLAGS"
 AC_CHECK_HEADERS([algorithm assert.h cassert cctype cmath cstddef cstdio cstdlib fstream functional iostream iterator limits map memory regex set sstream stdio.h string unordered_map unordered_set], [], [AC_MSG_FAILURE([required standard headers: algorithm assert.h cassert cctype cmath cstddef cstdio cstdlib fstream functional iostream iterator limits map memory regex set sstream stdio.h string unordered_map unordered_set])])
 
-# AX_CHECK_CLASS([org.antlr.Tool], [], [AC_MSG_FAILURE([ANTLR v3 is required])])
+CLASSPATH=${ANTLR3_JAR}:${CLASSPATH}
+export CLASSPATH
+AX_CHECK_CLASS([org.antlr.Tool], [], [AC_MSG_FAILURE([ANTLR v3 (v3.4 or v3.5) is required (try setting ANTLR3_JAR)])])
 # # FIXME: check it's version 3.4 or 3.5, also
 
 AX_BOOST_BASE
@@ -47,8 +42,8 @@ AX_BOOST_BASE
 AC_CHECK_HEADER([boost/regex/concepts.hpp], [], [AC_MSG_FAILURE([boost::regex is required])])
 AC_HAVE_LIBRARY(boost_regex, [], [AC_MSG_FAILURE([boost::regex is required])])
 
-AC_CHECK_HEADER([antlr3.h], [], [AC_MSG_FAILURE([antlr3 is required])])
-AC_HAVE_LIBRARY(antlr3c, [], [AC_MSG_FAILURE([antlr3 is required])])
+AC_CHECK_HEADER([antlr3.h], [], [AC_MSG_FAILURE([libantlr3c is required])])
+AC_HAVE_LIBRARY(antlr3c, [], [AC_MSG_FAILURE([libantlr3c is required])])
 
 CPPFLAGS=$OLD_CPPFLAGS
 
