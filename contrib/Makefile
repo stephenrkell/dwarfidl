@@ -16,7 +16,7 @@ ifeq ($(MVN),)
 #ifeq ($(realpath antlr3.jar),)
 #$(info Can't build without antlr3.jar or mvn (to build it))
 #$(error Either install maven or drop an antlr3.jar v3.4 (e.g. copy from antlr-3.4-complete.jar) into $(CONTRIB))
-endif
+#endif
 endif
 
 varlist :=
