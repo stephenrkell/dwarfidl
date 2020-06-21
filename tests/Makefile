@@ -6,12 +6,11 @@ OCAMLOPT ?= ocamlfind ocamlopt
 OCAMLOPTFLAGS += -linkpkg -package ctypes -package ctypes.foreign
 
 CFLAGS += -g3 -gstrict-dwarf -std=c99 -fno-eliminate-unused-debug-types -O2
+CXXFLAGS += -g3 -gstrict-dwarf -std=c++14
+
 CXXFLAGS += -I$(realpath $(dir $(THIS_MAKEFILE)))/../include
-
 LDFLAGS += -L$(realpath $(dir $(THIS_MAKEFILE)))/../lib -Wl,-rpath,$(realpath $(dir $(THIS_MAKEFILE)))/../lib
-
-ncurses_auto/ncurses_auto: LDLIBS += -Wl,--no-as-needed -lncurses
-lang-make-dies/lang-make-dies lang-make-dies: LDLIBS += -ldwarfidl -lcxxgen -lantlr3c -ldwarfpp -lc++fileno -lsrk31c++ -ldwarf -lelf
+LDLIBS += -ldwarfidl -lcxxgen -lantlr3c -ldwarfpp -lc++fileno -lsrk31c++ -ldwarf -lelf
 
 cases := $(wildcard [-a-z_]*)
 
@@ -46,7 +45,7 @@ checkrun-ncurses_auto:
 	$(MAKE) cleanrun-ncurses_auto >/dev/null 2>&1
 
 _onlyrun-%:
-	./$*
+	./$* ./$*
 
 _onlygdbrun-%:
 	gdb --args ./$* ./$*

@@ -13,11 +13,12 @@ pkgconfig_DATA = dwarfidl.pc
 dwarfidl_includedir = $(includedir)/dwarfidl
 dwarfidl_include_HEADERS = include/dwarfidl/create.hpp include/dwarfidl/cxx_model.hpp \
   include/dwarfidl/dwarfidl_cxx_target.hpp include/dwarfidl/dwarf_interface_walk.hpp \
+  include/dwarfidl/print.hpp include/dwarfidl/dwarfprint.hpp \
   include/dwarfidl/lang.hpp include/dwarfidl/dwarfidlNewCParser.h include/dwarfidl/dwarfidlNewCLexer.h \
   include/dwarfidl/dwarfidlNewCLexer.h include/dwarfidl/dwarfidlNewCParser.h
 
 lib_LTLIBRARIES = src/libdwarfidl.la
-src_libdwarfidl_la_SOURCES = src/cxx_model.cpp src/dwarfidl_cxx_target.cpp src/dwarf_interface_walk.cpp src/create.cpp src/lang.cpp src/print.cpp parser/dwarfidlNewCLexer.c parser/dwarfidlNewCParser.c
+src_libdwarfidl_la_SOURCES = src/cxx_model.cpp src/dwarfidl_cxx_target.cpp src/dwarf_interface_walk.cpp src/create.cpp src/lang.cpp src/print.cpp src/dwarfprint.cpp parser/dwarfidlNewCLexer.c parser/dwarfidlNewCParser.c
 src_libdwarfidl_la_LIBADD = -lantlr3c -lboost_filesystem -lboost_regex -lboost_system -lboost_serialization $(LIBANTLR3CXX_LIBS) $(LIBCXXGEN_LIBS) $(LIBDWARFPP_LIBS) $(LIBSRK31CXX_LIBS) $(LIBCXXFILENO_LIBS) -lz
 src_libdwarfidl_la_LDFLAGS = -Wl,-rpath,$(realpath $(top_srcdir))/lib
 src_libdwarfidl_la_CFLAGS = $(AM_CFLAGS)
@@ -25,20 +26,16 @@ src_libdwarfidl_la_CXXFLAGS = $(AM_CXXFLAGS)
 
 SUBDIRS = parser include . lib
 
-bin_PROGRAMS = src/dwarfidldump src/dwarfhpp src/dwarf-ocaml-ctypesgen src/test_dwarfprint
+bin_PROGRAMS = examples/dwarfidldump examples/dwarfhpp examples/generate-ocaml-ctypes
 
-src_dwarfidldump_SOURCES = src/dwarfidldump.cpp src/print.cpp
-src_dwarfidldump_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -lelf
+examples_dwarfidldump_SOURCES = examples/dwarfidldump.cpp src/print.cpp
+examples_dwarfidldump_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -lelf
 
-src_test_dwarfprint_SOURCES = src/dwarfprint.cpp src/test_dwarfprint.cpp
-src_test_dwarfprint_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -lelf
+examples_dwarfhpp_SOURCES = examples/dwarfhpp.cpp
+examples_dwarfhpp_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -lelf
 
-src_dwarfhpp_SOURCES = src/dwarfhpp.cpp
-src_dwarfhpp_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -lelf
-
-
-src_dwarf_ocaml_ctypesgen_SOURCES = src/dwarf-ocaml-ctypesgen.cpp
-src_dwarf_ocaml_ctypesgen_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -lelf
+examples_generate_ocaml_ctypes_SOURCES = examples/generate-ocaml-ctypes.cpp
+examples_generate_ocaml_ctypes_LDADD = src/libdwarfidl.la $(src_libdwarfidl_la_LIBADD) $(PARSER_OBJS) -lelf
 
 # pkg-config doesn't understand PKG_CXXFLAGS, but I'm buggered
 # if I'm going to have my Makefiles use _CFLAGS to mean _CXXFLAGS.
