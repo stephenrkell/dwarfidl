@@ -12,9 +12,10 @@ include config.mk
 
 MVN ?= $(shell which mvn)
 ifeq ($(MVN),)
-ifeq ($(realpath antlr3.jar),)
-$(info Can't build without antlr3.jar or mvn (to build it))
-$(error Either install maven or drop an antlr3.jar v3.4 (e.g. copy from antlr-3.4-complete.jar) into $(CONTRIB))
+# We're still using the tarball-download method, for now
+#ifeq ($(realpath antlr3.jar),)
+#$(info Can't build without antlr3.jar or mvn (to build it))
+#$(error Either install maven or drop an antlr3.jar v3.4 (e.g. copy from antlr-3.4-complete.jar) into $(CONTRIB))
 endif
 endif
 
@@ -61,7 +62,7 @@ subconfigs :=
 libantlr3c-3.4/configure.ac: antlr-3.4.tar.gz
 	mkdir -p libantlr3c-3.4 && cd libantlr3c-3.4 && tar --strip-components=3 --keep-newer-files -xvzf "$(CONTRIB)/$<" antlr-3.4/runtime/C
 libantlr3c/configure.ac: libantlr3c-3.4/configure.ac
-	ln -sf -T "$$(dirname $<)" "$$(dirname $@)"
+	mkdir -p "$$(dirname $@)" && ln -sf -T "$$(dirname $<)" "$$(dirname $@)"
 libantlr3c/Makefile.in: libantlr3c/configure.ac
 	# HACK: if the patch fails, it's probably because we've already applied it in an earlier failed run of these rules
 	cd libantlr3c && patch -p1 < "$(CONTRIB)"/libantlr3c-3.4-getparent-allow-null.patch </dev/null || true
