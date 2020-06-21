@@ -1,5 +1,6 @@
 #include <fstream>
 #include <string>
+#include <boost/iostreams/filtering_streambuf.hpp>
 
 #include "dwarfidl/lang.hpp"
 #include "dwarfidl/dwarfprint.hpp"
@@ -16,6 +17,45 @@ typedef ANTLR3_BASE_TREE Tree;
 typedef ANTLR3_COMMON_TREE CommonTree;
 
 using dwarf::tool::gather_interface_dies;
+
+/* This struct will get copied, so should not keep state itself. */
+struct counting_filter : boost::iostreams::output_filter
+{
+	unsigned *chars;
+	unsigned *newlines;
+	counting_filter(unsigned *chars, unsigned *newlines) : chars(chars), newlines(newlines) {}
+	template<typename Sink>
+	bool put_char(Sink& dest, int c)
+	{
+		if (c == '\n') ++(*newlines);
+		++(*chars);
+		return boost::iostreams::put(dest, c);
+	}
+	template<typename Sink>
+	bool put(Sink& dest, int c) 
+	{
+		return put_char(dest, c);
+	}
+};
+class counting_ostream
+: private boost::iostreams::filtering_ostreambuf,
+  private counting_filter,
+  public std::ostream
+{
+	unsigned chars;
+	unsigned newlines;
+public:
+	counting_ostream(std::ostream& s = std::cout)
+	: boost::iostreams::filtering_ostreambuf(),
+	  counting_filter(&chars, &newlines),
+	  std::ostream(static_cast<boost::iostreams::filtering_ostreambuf *>(this))
+	{
+		push(static_cast<counting_filter&>(*this));
+		push(s);
+	}
+	unsigned chars_written() const { return chars; }
+	unsigned newlines_written() const { return newlines; }
+};
 
 int main(int argc, char **argv)
 {
@@ -84,11 +124,17 @@ int main(int argc, char **argv)
 	});
 	char tmpname[] = "/tmp/tmp.XXXXXX";
 	int fd = mkstemp(tmpname);
+	// HACK to ensure that bad parse really does fail the test
+	//FILE *the_f = fopen(tmpname, "r");
+	//assert(the_f);
+	//int fd = fileno(the_f);
 	if (fd == -1) exit(42);
 	std::ofstream outf(tmpname);
 	assert(outf);
 	close(fd);
-	print_dies(outf, dies, types);
+	// print to a special stream that counts lines and characters.
+	counting_ostream counting_outf(outf);
+	print_dies(counting_outf, dies, types);
 
 	/* also test that we can parse this output, using the dwarfidlNewC parser. */
 	pANTLR3_INPUT_STREAM in_fileobj = antlr3FileStreamNew((uint8_t *) tmpname,
@@ -100,9 +146,11 @@ int main(int argc, char **argv)
 	dwarfidlNewCParser_toplevel_return ret = parser->toplevel(parser);
 	Tree *tree = ret.tree;
 	assert(tree);
-	assert(ret.start != ret.stop);
-	//unlink(tmpname);
-	std::cerr << "DEBUG: temporary output file is at " << tmpname << std::endl;
+	// how many lines did we parse? it should match the number output
+	unsigned nlines = ret.stop->getLine(ret.stop);
+	assert(nlines == counting_outf.newlines_written() - 1);
+	unlink(tmpname);
+	//std::cerr << "DEBUG: temporary output file is at " << tmpname << std::endl;
 
 	return 0;
 }
