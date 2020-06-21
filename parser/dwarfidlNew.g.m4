@@ -78,6 +78,9 @@ tokens {
 
 antlr_m4_begin_rules
 
+// Lexer rules
+
+// We have to put keywords first, so they get priority over idents
 UNDERSCORE : '_';
 KEYWORD_TRUE   : 'true';
 KEYWORD_FALSE  : 'false';
@@ -97,45 +100,6 @@ KEYWORD_VOID   : 'void';
 KEYWORD_FUN    : 'fun';
 
 KEYWORD_FOOTPRINT_FUNCTION: 'footprint_function';
-fragment SPACE         : ' ';
-fragment ALPHA         : ('A'..'Z'|'a'..'z');
-fragment NONZERO_DIGIT : ('1'..'9');
-fragment DIGIT         : ('0'..'9');
-fragment HEX_DIGIT     : ('0'..'9'|'a'..'f'|'A'..'F');
-fragment HEX_INT       : '0x' HEX_DIGIT+;
-fragment OCTAL_INT     : '0' NONZERO_DIGIT DIGIT*;
-fragment UNSIGNED_INT  : (ZERO | NONZERO_DIGIT DIGIT*) ('U'|'u');
-fragment SIGNED_INT    : '-'? NONZERO_DIGIT DIGIT*;
-fragment ZERO          : '0';
-
-INT : HEX_INT | OCTAL_INT | UNSIGNED_INT | SIGNED_INT | ZERO;
-
-OPEN_BRACE   : '{';
-CLOSE_BRACE  : '}';
-OPEN         : '(';
-CLOSE        : ')';
-OPEN_SQUARE  : '[';
-CLOSE_SQUARE : ']';
-SINGLE_QUOTE : '\'';
-DOUBLE_QUOTE : '"';
-OPEN_ANGLE   : '<';
-CLOSE_ANGLE  : '>';
-ESCAPE_CHAR  : '\\';
-
-//ESCAPE : (ESCAPE_CHAR (('U'|'u') HEX_DIGIT HEX_DIGIT HEX_DIGIT HEX_DIGIT | ('A'..'T'|'V'..'Z'|'a'..'t'|'v'..'z') | SPACE | SINGLE_QUOTE | DOUBLE_QUOTE));
-
-COMMA      : ',';
-COLON      : ':';
-SEMICOLON  : ';';
-HYPHEN     : '-';
-EQUALS     : '=';
-AT         : '@';
-PLUS       : '+';
-RANGE      : '..';
-EXCL       : '!';
-DOT        : '.';
-HASH       : '#';
-
 
 // // for debugging using antlrworks -- uncomment these and comment
 // // the following normal KEYWORD_TAG and KEYWORD_ATTR definitions
@@ -293,10 +257,48 @@ KEYWORD_ATTR
 	| 'macro_info'
 	| 'discr_value';
 
+fragment SPACE         : ' ';
+fragment ALPHA         : ('A'..'Z'|'a'..'z');
+fragment NONZERO_DIGIT : ('1'..'9');
+fragment DIGIT         : ('0'..'9');
+fragment HEX_DIGIT     : ('0'..'9'|'a'..'f'|'A'..'F');
+fragment HEX_INT       : '0x' HEX_DIGIT+;
+fragment OCTAL_INT     : '0' NONZERO_DIGIT DIGIT*;
+fragment UNSIGNED_INT  : (ZERO | NONZERO_DIGIT DIGIT*) ('U'|'u');
+fragment SIGNED_INT    : '-'? NONZERO_DIGIT DIGIT*;
+fragment ZERO          : '0';
+
+INT : HEX_INT | OCTAL_INT | UNSIGNED_INT | SIGNED_INT | ZERO;
+
+OPEN_BRACE   : '{';
+CLOSE_BRACE  : '}';
+OPEN         : '(';
+CLOSE        : ')';
+OPEN_SQUARE  : '[';
+CLOSE_SQUARE : ']';
+SINGLE_QUOTE : '\'';
+DOUBLE_QUOTE : '"';
+OPEN_ANGLE   : '<';
+CLOSE_ANGLE  : '>';
+ESCAPE_CHAR  : '\\';
+
+//ESCAPE : (ESCAPE_CHAR (('U'|'u') HEX_DIGIT HEX_DIGIT HEX_DIGIT HEX_DIGIT | ('A'..'T'|'V'..'Z'|'a'..'t'|'v'..'z') | SPACE | SINGLE_QUOTE | DOUBLE_QUOTE));
+
+COMMA      : ',';
+COLON      : ':';
+SEMICOLON  : ';';
+HYPHEN     : '-';
+EQUALS     : '=';
+AT         : '@';
+PLUS       : '+';
+RANGE      : '..';
+EXCL       : '!';
+DOT        : '.';
+HASH       : '#';
+
+// idents can contain escaped characters
 fragment BEGIN_IDENT_SEQ : '\\'.|'a'..'z'|'A'..'Z'|'_'+'a'..'z'|'_'+'A'..'Z'|'_'+'0'..'9';
 fragment CONT_IDENT_SEQ  : 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\\'.;
-
-
 IDENT : BEGIN_IDENT_SEQ CONT_IDENT_SEQ*;
 
 STRING_LIT
@@ -312,7 +314,9 @@ BLANKS        : ('\t'|' ')+ { antlr_m4_skip_action };
 LINE_COMMENT  : ('//' .* '\r'? '\n') { antlr_m4_skip_action };
 BLOCK_COMMENT : ('/*' .* '*/') { antlr_m4_skip_action };
 
-boolean_value : KEYWORD_TRUE | KEYWORD_FALSE;
+// Parser rules
+
+boolean_literal : KEYWORD_TRUE | KEYWORD_FALSE;
 
 absolute_offset
 	: AT INT
@@ -364,7 +368,7 @@ loc_list
 	;
 
 attr_key   : KEYWORD_ATTR | NAME | TYPE | INT;
-attr_value : boolean_value | INT | die_reference | loc_list | STRING_LIT;
+attr_value : boolean_literal | INT | die_reference | loc_list | STRING_LIT;
 
 die_reference : identifier
 	| offset

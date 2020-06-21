@@ -156,7 +156,21 @@ static inline void _debug_print_print(optional<string> name_ptr, Dwarf_Off offse
 
 }
 
-
+string escape_string_lit(string content)
+{
+	replace_all(content, "\\", "\\\\");
+	replace_all(content, "\n", "\\n");
+	replace_all(content, "\"", "\\\"");
+	return content;
+}
+string escape_ident(const string& content)
+{
+	return boost::regex_replace(content,
+		boost::regex("[^0-9A-Za-z_]|^[0-9]"),
+		[](const boost::smatch& what) { return string("\\") + what[0].str(); },
+		boost::match_default | boost::format_all
+	);
+}
 
 void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_iter, optional<type_set&> types) {
 	if (!die_iter) return;
@@ -197,7 +211,7 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 	s << tag;
 
 	if (name_ptr) {
-		s << " " << *name_ptr;
+		s << " " << escape_ident(*name_ptr);
 		name_printed = true;
 	}
 	
@@ -245,7 +259,7 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 		 auto type_name = (concrete_name ? concrete_name : abstract_name);
 		 if (type_name) {
 			  _debug_print_print(name_ptr, offset, type_die, concrete_die);
-			  s << " : " << *type_name;
+			  s << " : " << escape_ident(*type_name);
 		 } else {
 			  auto type_offset = (concrete_die ? concrete_die.offset_here() : type_die.offset_here());
 			  s << " : @" << to_hex(type_offset);
@@ -317,11 +331,7 @@ void print_type_die(std::ostream &_s, iterator_df<dwarf::core::basic_die> die_it
 
 			switch (v.get_form()) {
 			case attribute_value::STRING: {
-				string content = v.get_string();
-				replace_all(content, "\\", "\\\\");
-				replace_all(content, "\n", "\\n");
-				replace_all(content, "\"", "\\\"");
-				s << "\"" << content << "\"";
+				s << "\"" << escape_string_lit(v.get_string()) << "\"";
 			}
 				break;
 			case attribute_value::FLAG: {
