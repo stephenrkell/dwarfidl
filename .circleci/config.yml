@@ -9,10 +9,11 @@ jobs:
           command: |
             apt update
             apt install -y \
-              libelf-dev libdw-dev binutils-dev \
+              build-essential make git \
               autoconf automake libtool pkg-config autoconf-archive \
-              g++ default-jre-headless \
-              make git gdb wget \
+              g\+\+ default-jre-headless \
+              wget python3 python2.7 python-minimal \
+              libelf-dev libdw-dev binutils-dev \
               libboost-iostreams-dev libboost-regex-dev \
               libboost-serialization-dev libboost-filesystem-dev
       - checkout
