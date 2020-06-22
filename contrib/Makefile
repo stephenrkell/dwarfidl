@@ -96,13 +96,13 @@ clean::
 
 CONFIG_MK += \nANTLR3_JAR := $(ANTLR3_JAR)\n
 CONFIG_MK += \nANTLR3C_DIR := $(CONTRIB)/libantlr3c\n
-CONFIG_MK += \nCXXFLAGS += -I\$$(ANTLR3C_DIR)/include -I\$$(ANTLR3C_DIR)/\n
-CONFIG_MK += \nLDFLAGS += -L\$$(ANTLR3C_DIR)/.libs -Wl,-rpath,\$$(ANTLR3C_DIR)/.libs\n
+CONFIG_MK += \nCPPFLAGS += -I$$(ANTLR3C_DIR)/include -I$$(ANTLR3C_DIR)/\n
+CONFIG_MK += \nLDFLAGS += -L$$(ANTLR3C_DIR)/.libs -Wl,-rpath,$$(ANTLR3C_DIR)/.libs\n
 # Helpful hint, pasted from configure.ac, about why libantlr3c is different:
 # For libantlr3c, there's no pkg-config, so we just use CPPFLAGS and LDFLAGS
 # to pass the configuration. So we need to make sure that those variables,
 # active at configure time, are passed through.
-varlist += ANTLR3_JAR ANTLR3C_DIR CXXFLAGS CPP LDFLAGS
+varlist += ANTLR3_JAR ANTLR3C_DIR CPPFLAGS LDFLAGS
 
 # ----------------------------m4ntlr
 M4NTLR_PATH := $(CONTRIB)/m4ntlr
