@@ -143,6 +143,7 @@ libcxxgen/Makefile.in:
                 automake
 
 libcxxgen/config.status: libcxxgen/Makefile.in
+	cd libcxxgen && \
 	LIBCXXFILENO_CXXFLAGS="-I$(LIBCXXFILENO_DIR)/include" \
 	LIBCXXFILENO_LIBS="-L$(LIBCXXFILENO_DIR)/lib -Wl,-rpath,$(LIBCXXFILENO_DIR)/lib" \
 	LIBSRK31CXX_CXXFLAGS="-I$(LIBSRK31CXX_DIR)/include" \
