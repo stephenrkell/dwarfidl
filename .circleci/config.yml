@@ -11,7 +11,7 @@ jobs:
             apt install -y \
               build-essential make git \
               autoconf automake libtool pkg-config autoconf-archive \
-              g\+\+ default-jre-headless \
+              g\+\+ default-jre-headless default-jdk-headless \
               wget python3 python2.7 python-minimal \
               libelf-dev libdw-dev binutils-dev \
               libboost-iostreams-dev libboost-regex-dev \
