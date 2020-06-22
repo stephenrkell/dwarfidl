@@ -10,7 +10,7 @@ CXXFLAGS += -g3 -gstrict-dwarf -std=c++14
 
 CXXFLAGS += -I$(realpath $(dir $(THIS_MAKEFILE)))/../include
 LDFLAGS += -L$(realpath $(dir $(THIS_MAKEFILE)))/../lib -Wl,-rpath,$(realpath $(dir $(THIS_MAKEFILE)))/../lib
-LDLIBS += -ldwarfidl -lcxxgen -lantlr3c -ldwarfpp -lc++fileno -lsrk31c++ -ldwarf -lelf
+LDLIBS += -ldwarfidl -lcxxgen -lantlr3c -ldwarfpp -lc++fileno -lsrk31c++ -lelf
 
 cases := $(wildcard [-a-z_]*)
 
