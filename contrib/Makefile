@@ -119,7 +119,7 @@ libdwarfpp/config.status:
 	$(MAKE) -C contrib && ( . contrib/env.sh && \
 	 ./configure --prefix=$(CONTRIB)/usr $(LIBDWARFPP_CONFIGURE_FLAGS) )
 
-libdwarfpp/contrib/config.mk: build-libdwarfpp
+$(CONTRIB)/libdwarfpp/contrib/config.mk libdwarfpp/contrib/config.mk: build-libdwarfpp
 
 .PHONY: build-libdwarfpp
 build-libdwarfpp: libdwarfpp/config.status
@@ -184,16 +184,21 @@ CONFIG_MK += \nLIBANTLR3CXX_LIBS += -L$(CONTRIB)/libantlr3c++/lib -Wl,-rpath,$(C
 varlist += LIBANTLR3CXX_CXXFLAGS LIBANTLR3CXX_LIBS
 
 # ----------------------------config.mk
-
-# config.mk is part of us, but also may be included by other contrib/Makefiles
+# If the user nukes a sub-config.mk that our config.mk depends on,
+# we'd like to be able to rebuild it. So we include a generic rule
+# for rebuilding config.mks.
 config.mk: $(subconfigs)
-	(printf "$(foreach cfg,$(subconfigs),\ninclude $(CONTRIB)/$(cfg))"; \
-        printf '$(CONFIG_MK)'; echo) > "$@" || (rm -f "$@"; false)
-# env.sh exports some vars which may be useful at configure time
-$(CONTRIB)/env.sh:
-	(printf "$(foreach cfg,$(subconfigs),\nsource $$(dirname $(CONTRIB)/$(cfg))/env.sh)"; \
-        printf '$(foreach var,$(varlist),\nexport $(var)="$($(var))")'; echo )>"$@" \
-        || (rm -f "$@"; false)
-
+	(printf '%%/config.mk:\n\t$$(MAKE) -C $$* config.mk\n\n'; \
+	printf "$(foreach cfg,$(subconfigs),\ninclude $(CONTRIB)/$(cfg))"; \
+	printf '$(CONFIG_MK)'; echo) > "$@" || (rm -f "$@"; false)
+# env.sh exports some vars
+env.sh $(CONTRIB)/env.sh: $(foreach cfg,$(subconfigs),$(dir $(CONTRIB)/$(cfg))env.sh)
+	(printf "$(foreach cfg,$(subconfigs),\n. $$(dirname $(CONTRIB)/$(cfg))/env.sh)"; \
+	printf '$(foreach var,$(varlist),\nexport $(var)="$($(var))")'; echo )>"$@" || (rm -f "$@"; false)
+# Similarly when we make an env.sh, have Make ensure existence of
+# its depended-on env.sh too, so that we don't get 'source'-time
+# failures of sub-env.sh.
+$(foreach cfg,$(subconfigs),$(dir $(CONTRIB)/$(cfg))env.sh): %/env.sh:
+	$(MAKE) -C $* env.sh
 clean::
 	rm -f config.mk env.sh
