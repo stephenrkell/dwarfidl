@@ -119,7 +119,7 @@ libdwarfpp/config.status:
 	$(MAKE) -C contrib && ( . contrib/env.sh && \
 	 ./configure --prefix=$(CONTRIB)/usr $(LIBDWARFPP_CONFIGURE_FLAGS) )
 
-$(CONTRIB)/libdwarfpp/contrib/config.mk libdwarfpp/contrib/env.sh:
+libdwarfpp/contrib/config.mk libdwarfpp/contrib/env.sh:
 	$(MAKE) -C libdwarfpp/contrib config.mk env.sh
 
 .PHONY: build-libdwarfpp
