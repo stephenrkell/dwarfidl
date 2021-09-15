@@ -155,7 +155,7 @@ libcxxgen/config.status: libcxxgen/Makefile.in
 	 ./configure --prefix=$(CONTRIB)/usr $(LIBCXXGEN_CONFIGURE_FLAGS)
 
 .PHONY: build-libcxxgen
-build-libcxxgen: libcxxgen/config.status
+build-libcxxgen: libcxxgen/config.status build-libdwarfpp
 	$(MAKE) -C libcxxgen
 
 clean::
