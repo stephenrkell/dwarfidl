@@ -119,7 +119,8 @@ libdwarfpp/config.status:
 	$(MAKE) -C contrib && ( . contrib/env.sh && \
 	 ./configure --prefix=$(CONTRIB)/usr $(LIBDWARFPP_CONFIGURE_FLAGS) )
 
-$(CONTRIB)/libdwarfpp/contrib/config.mk libdwarfpp/contrib/config.mk: build-libdwarfpp
+libdwarfpp/contrib/config.mk libdwarfpp/contrib/env.sh:
+	$(MAKE) -C libdwarfpp/contrib config.mk env.sh
 
 .PHONY: build-libdwarfpp
 build-libdwarfpp: libdwarfpp/config.status
@@ -154,7 +155,7 @@ libcxxgen/config.status: libcxxgen/Makefile.in
 	 ./configure --prefix=$(CONTRIB)/usr $(LIBCXXGEN_CONFIGURE_FLAGS)
 
 .PHONY: build-libcxxgen
-build-libcxxgen: libcxxgen/config.status
+build-libcxxgen: libcxxgen/config.status build-libdwarfpp
 	$(MAKE) -C libcxxgen
 
 clean::

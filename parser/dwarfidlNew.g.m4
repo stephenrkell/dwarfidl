@@ -298,7 +298,7 @@ HASH       : '#';
 
 // idents can contain escaped characters
 fragment BEGIN_IDENT_SEQ : '\\'.|'a'..'z'|'A'..'Z'|'_'+'a'..'z'|'_'+'A'..'Z'|'_'+'0'..'9';
-fragment CONT_IDENT_SEQ  : 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'\\'.;
+fragment CONT_IDENT_SEQ  : 'a'..'z'|'A'..'Z'|'0'..'9'|'_'|'$'|'\\'.;
 IDENT : BEGIN_IDENT_SEQ CONT_IDENT_SEQ*;
 
 STRING_LIT

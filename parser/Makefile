@@ -6,7 +6,7 @@ GRAMMAR_PATH ?= .
 
 -include $(realpath $(dir $(THIS_MAKEFILE)))/../config.mk
 
-M4NTLR_PATH ?= $(dir $(THIS_MAKEFILE)))/../contrib/m4ntlr
+M4NTLR_PATH ?= $(dir $(THIS_MAKEFILE))/../contrib/m4ntlr
 ANTLR ?= java -classpath .:$(ANTLR3_JAR):$(CLASSPATH) org.antlr.Tool
 export CLASSPATH ANTLR M4NTLR_PATH GRAMMAR_TOPLEVEL GRAMMAR_OPTIONS GRAMMAR_PATH
 
