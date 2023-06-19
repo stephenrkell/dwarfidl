@@ -153,6 +153,7 @@ namespace tool {
 	{
 		if (p_d.tag_here() == DW_TAG_array_type) return false;
 		if (p_d.tag_here() == DW_TAG_subroutine_type) return false;
+		if (p_d.tag_here() == DW_TAG_subprogram) return false;
 		// FIXME: any more?
 		// now we know this bit of the type is fine for qualifying 
 		// what about chained bits?
@@ -254,10 +255,11 @@ namespace tool {
 					+ arrsize.str()
 					+ "]", !!infix_typedef_name ? true : false);
 			}
-			case DW_TAG_subroutine_type: {
+			case DW_TAG_subroutine_type:
+			case DW_TAG_subprogram: {
 				ostringstream s;
-				iterator_df<subroutine_type_die> subroutine_type 
-				 = p_d.as_a<subroutine_type_die>();
+				iterator_df<type_describing_subprogram_die> subroutine_type 
+				 = p_d.as_a<type_describing_subprogram_die>();
 				s << (subroutine_type->get_type() 
 					? cxx_declarator_from_type_die(subroutine_type->get_type(),
 					optional<string>(), 
@@ -592,7 +594,7 @@ namespace tool {
 	
 	string
 	cxx_generator_from_dwarf::make_function_declaration_of_type(
-		iterator_df<subroutine_type_die> p_d,
+		iterator_df<type_describing_subprogram_die> p_d,
 		const string& name,
 		bool write_semicolon /* = true */,
 		bool wrap_with_extern_lang /* = true */

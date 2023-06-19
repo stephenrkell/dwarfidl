@@ -36,6 +36,7 @@ using dwarf::core::type_die;
 using dwarf::core::base_type_die;
 using dwarf::core::subprogram_die;
 using dwarf::core::subroutine_type_die;
+using dwarf::core::type_describing_subprogram_die;
 using dwarf::core::formal_parameter_die;
 
 using std::cerr;
@@ -155,7 +156,7 @@ public:
 	
 	string
 	make_function_declaration_of_type(
-		iterator_df<subroutine_type_die> p_d,
+		iterator_df<type_describing_subprogram_die> p_d,
 		const string& name,
 		bool write_semicolon = true,
 		bool wrap_with_extern_lang = true
