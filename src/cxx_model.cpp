@@ -273,6 +273,7 @@ namespace tool {
 				auto children = p_d.children();
 				for (auto i_child = children.first; i_child != children.second; ++i_child)
 				{
+					if (i_child != children.first) s << ", ";
 					switch (i_child.tag_here())
 					{
 						case DW_TAG_formal_parameter:
@@ -288,7 +289,6 @@ namespace tool {
 							break;
 						default: continue;
 					}
-					s << ", ";
 				}
 				s << ")"; 
 				return make_pair(s.str(), true);
@@ -621,36 +621,59 @@ namespace tool {
 		{
 			out << "extern \"" << lang_to_use << "\" {\n";
 		}
+		ostringstream without_rett_s;
 		
-		if (p_d->get_type()) out << name_for_type(p_d->get_type()).first;
-		else out << "void";
-		out << " " << name << "(";
-		
+		auto rett = p_d->get_type();
+		//rett = rett ? rett->get_concrete_type() : rett;
+
+		/* First print (to a temporary buffer) the whole declaration *except*
+		 * for the return type. */
+		without_rett_s << name << "(";
 		bool written_an_arg = false;
 		auto fp_children = p_d.children().subseq_of<formal_parameter_die>();
 		for (auto i_fp = fp_children.first; i_fp != fp_children.second; ++i_fp)
 		{
-			if (i_fp != fp_children.first) out << ", ";
+			if (i_fp != fp_children.first) without_rett_s << ", ";
 			
 			if (i_fp->get_type())
 			{
 				auto declarator = (i_fp.name_here())
 					? name_for_type(i_fp->get_type(), *i_fp.name_here())
 					: name_for_type(i_fp->get_type());
-				out << declarator.first;
-				if (!declarator.second) out << " " 
+				without_rett_s << declarator.first;
+				if (!declarator.second) without_rett_s << " "
 					<< (i_fp.name_here() ? *i_fp.name_here() : "");
-				else out << "void *" << (i_fp.name_here() ? *i_fp.name_here() : "");
+				else without_rett_s << "void *" << (i_fp.name_here() ? *i_fp.name_here() : "");
 				written_an_arg = true;
 			}
 		}
 		auto unspec_children = p_d.children().subseq_of<unspecified_parameters_die>();
 		if (unspec_children.first != unspec_children.second)
 		{
-			if (written_an_arg) out << ", ";
-			out << "...";
+			if (written_an_arg) without_rett_s << ", ";
+			without_rett_s << "...";
 		}
-		out << ")";
+		without_rett_s << ")";
+		/* OK. Now, if our return type doesn't infix a name,
+		 * we just print the return type followed by the rest. */
+		if (!rett || !rett->get_concrete_type()) out << "void " << without_rett_s.str();
+		else if (!type_infixes_name(rett))
+		{
+			out << name_for_type(p_d->get_type()).first << without_rett_s.str();
+		}
+		else /* it *does* infix a name */
+		{
+			/* FIXME: this treatment should be natural and recursive.
+			 * What if we have a function that returns a pointer to a function that
+			 * returns a pointer to a function that...?
+			 */
+			auto declarator = cxx_declarator_from_type_die(
+				rett,
+				without_rett_s.str(),
+				/* use_friendly_names */ true, /* extra_prefix */ string(""),
+				/* use_struct_and_union_prefixes */ true);
+			out << declarator.first;
+		}
 		if (write_semicolon) out << ";";
 		out << endl;
 		if (write_semicolon && wrap_with_extern_lang) 
