@@ -1,0 +1,665 @@
+@0x23fe8 typedef size_t : long\ unsigned\ int [
+	decl_column = 23u,
+	type = @0x23ff4
+];
+
+@0x23ff4 base_type long\ unsigned\ int [
+	byte_size = 8u,
+	encoding = 7u
+];
+
+@0x2404e pointer_type [
+byte_size = 8u
+];
+
+@0x240bd base_type char [
+	byte_size = 1u,
+	encoding = 6u
+];
+
+@0x240c4 const_type : char [
+type = @0x240bd
+];
+
+@0x240c9 base_type int [
+	byte_size = 4u,
+	encoding = 5u
+];
+
+@0x240ff structure_type _IO_FILE [
+	byte_size = 216u,
+	decl_column = 8u
+	] {
+	@0x2410c member _flags : int [
+		data_member_location = {
+		plus_uconst(0);
+		},
+		decl_column = 7u,
+		type = @0x240c9
+	];
+	@0x24119 member _IO_read_ptr : @0x245e5 [
+		data_member_location = {
+		plus_uconst(8);
+		},
+		decl_column = 9u
+	];
+	@0x24126 member _IO_read_end : @0x245e5 [
+		data_member_location = {
+		plus_uconst(16);
+		},
+		decl_column = 9u
+	];
+	@0x24133 member _IO_read_base : @0x245e5 [
+		data_member_location = {
+		plus_uconst(24);
+		},
+		decl_column = 9u
+	];
+	@0x24140 member _IO_write_base : @0x245e5 [
+		data_member_location = {
+		plus_uconst(32);
+		},
+		decl_column = 9u
+	];
+	@0x2414d member _IO_write_ptr : @0x245e5 [
+		data_member_location = {
+		plus_uconst(40);
+		},
+		decl_column = 9u
+	];
+	@0x2415a member _IO_write_end : @0x245e5 [
+		data_member_location = {
+		plus_uconst(48);
+		},
+		decl_column = 9u
+	];
+	@0x24167 member _IO_buf_base : @0x245e5 [
+		data_member_location = {
+		plus_uconst(56);
+		},
+		decl_column = 9u
+	];
+	@0x24174 member _IO_buf_end : @0x245e5 [
+		data_member_location = {
+		plus_uconst(64);
+		},
+		decl_column = 9u
+	];
+	@0x24181 member _IO_save_base : @0x245e5 [
+		data_member_location = {
+		plus_uconst(72);
+		},
+		decl_column = 9u
+	];
+	@0x2418e member _IO_backup_base : @0x245e5 [
+		data_member_location = {
+		plus_uconst(80);
+		},
+		decl_column = 9u
+	];
+	@0x2419b member _IO_save_end : @0x245e5 [
+		data_member_location = {
+		plus_uconst(88);
+		},
+		decl_column = 9u
+	];
+	@0x241a8 member _markers : @0x25588 [
+		data_member_location = {
+		plus_uconst(96);
+		},
+		decl_column = 22u
+	];
+	@0x241b5 member _chain : @0x2558e [
+		data_member_location = {
+		plus_uconst(104);
+		},
+		decl_column = 20u
+	];
+	@0x241c2 member _fileno : int [
+		data_member_location = {
+		plus_uconst(112);
+		},
+		decl_column = 7u,
+		type = @0x240c9
+	];
+	@0x241cf member _flags2 : int [
+		data_member_location = {
+		plus_uconst(116);
+		},
+		decl_column = 7u,
+		type = @0x240c9
+	];
+	@0x241dc member _old_offset : long\ int [
+		data_member_location = {
+		plus_uconst(120);
+		},
+		decl_column = 11u,
+		type = @0x24d61
+	];
+	@0x241e9 member _cur_column : short\ unsigned\ int [
+		data_member_location = {
+		plus_uconst(128);
+		},
+		decl_column = 18u,
+		type = @0x24298
+	];
+	@0x241f6 member _vtable_offset : signed\ char [
+		data_member_location = {
+		plus_uconst(130);
+		},
+		decl_column = 15u,
+		type = @0x24bf0
+	];
+	@0x24203 member _shortbuf : @0x25594 [
+		data_member_location = {
+		plus_uconst(131);
+		},
+		decl_column = 19u
+	];
+	@0x24210 member _lock : @0x255a4 [
+		data_member_location = {
+		plus_uconst(136);
+		},
+		decl_column = 15u
+	];
+	@0x2421d member _offset : long\ int [
+		data_member_location = {
+		plus_uconst(144);
+		},
+		decl_column = 13u,
+		type = @0x24d6d
+	];
+	@0x2422a member _codecvt : @0x255af [
+		data_member_location = {
+		plus_uconst(152);
+		},
+		decl_column = 23u
+	];
+	@0x24237 member _wide_data : @0x255ba [
+		data_member_location = {
+		plus_uconst(160);
+		},
+		decl_column = 25u
+	];
+	@0x24244 member _freeres_list : @0x2558e [
+		data_member_location = {
+		plus_uconst(168);
+		},
+		decl_column = 20u
+	];
+	@0x24251 member _freeres_buf : @0x2404e [
+		data_member_location = {
+		plus_uconst(176);
+		},
+		decl_column = 9u
+	];
+	@0x2425e member __pad5 : long\ unsigned\ int [
+		data_member_location = {
+		plus_uconst(184);
+		},
+		decl_column = 10u,
+		type = @0x23fe8
+	];
+	@0x2426b member _mode : int [
+		data_member_location = {
+		plus_uconst(192);
+		},
+		decl_column = 7u,
+		type = @0x240c9
+	];
+	@0x24278 member _unused2 : @0x255c0 [
+		data_member_location = {
+		plus_uconst(196);
+		},
+		decl_column = 74u
+	];
+	
+};
+
+@0x24286 typedef FILE : _IO_FILE [
+	decl_column = 25u,
+	type = @0x240ff
+];
+
+@0x24298 base_type short\ unsigned\ int [
+	byte_size = 2u,
+	encoding = 7u
+];
+
+@0x242aa pointer_type : char [
+	byte_size = 8u,
+	type = @0x240c4
+];
+
+@0x245e5 pointer_type : char [
+	byte_size = 8u,
+	type = @0x240bd
+];
+
+@0x24881 base_type long\ int [
+	byte_size = 8u,
+	encoding = 5u
+];
+
+@0x24bf0 base_type signed\ char [
+	byte_size = 1u,
+	encoding = 6u
+];
+
+@0x24d61 typedef __off_t : long\ int [
+	decl_column = 25u,
+	type = @0x24881
+];
+
+@0x25404 pointer_type : @0x245e5 [
+byte_size = 8u
+];
+
+@0x2557a typedef _IO_lock_t [
+decl_column = 14u
+];
+
+@0x25583 structure_type _IO_marker [
+declaration = true
+];
+
+@0x25588 pointer_type : _IO_marker [
+	byte_size = 8u,
+	type = @0x25583
+];
+
+@0x2558e pointer_type : _IO_FILE [
+	byte_size = 8u,
+	type = @0x240ff
+];
+
+@0x25594 array_type : char [
+	type = @0x240bd
+	] {
+	@0x2559d subrange_type : @0x23ff4 [
+	upper_bound = 0u
+	];
+	
+};
+
+@0x255a4 pointer_type : _IO_lock_t [
+	byte_size = 8u,
+	type = @0x2557a
+];
+
+@0x255aa structure_type _IO_codecvt [
+declaration = true
+];
+
+@0x255af pointer_type : _IO_codecvt [
+	byte_size = 8u,
+	type = @0x255aa
+];
+
+@0x255b5 structure_type _IO_wide_data [
+declaration = true
+];
+
+@0x255ba pointer_type : _IO_wide_data [
+	byte_size = 8u,
+	type = @0x255b5
+];
+
+@0x255c0 array_type : char [
+	type = @0x240bd
+	] {
+	@0x255c9 subrange_type : @0x23ff4 [
+	upper_bound = 19u
+	];
+	
+};
+
+@0x255ed pointer_type : _IO_FILE [
+	byte_size = 8u,
+	type = @0x24286
+];
+
+@0x2570f subprogram fopen : @0x255ed [
+	decl_column = 14u,
+	declaration = true
+	] {
+	@0x2571f formal_parameter : @0x242aa;
+	@0x25724 formal_parameter : @0x242aa;
+	
+};
+
+@0x3a38e subprogram main : int [
+	low_pc = 0x1d408,
+	high_pc = 1510u,
+	decl_column = 5u,
+	frame_base = {
+	call_frame_cfa;
+	},
+	type = @0x240c9
+	] {
+	@0x3a3b1 formal_parameter argc : int [
+		location = {
+		fbreg(18446744073709545724);
+		},
+		decl_column = 14u,
+		type = @0x240c9
+	];
+	@0x3a3c1 formal_parameter argv : @0x25404 [
+		location = {
+		fbreg(18446744073709545712);
+		},
+		decl_column = 27u
+	];
+	@0x3a3f2 structure_type root_die_with_sticky_types [
+		byte_size = 616u,
+		containing_type = @0x31b61,
+		decl_column = 9u
+		] {
+		@0x3a405 inheritance : root_die [
+			data_member_location = {
+			plus_uconst(0);
+			},
+			type = @0x31b61
+		];
+		@0x3a40b subprogram root_die_with_sticky_types [
+			artificial = true,
+			declaration = true,
+			object_pointer = @0x3a419
+			] {
+			@0x3a419 formal_parameter : @0x39f31 [
+			artificial = true
+			];
+			@0x3a41e formal_parameter : @0x39f37;
+			
+		};
+		@0x3a424 subprogram root_die_with_sticky_types [
+			artificial = true,
+			declaration = true,
+			object_pointer = @0x3a432
+			] {
+			@0x3a432 formal_parameter : @0x39f31 [
+			artificial = true
+			];
+			@0x3a437 formal_parameter : @0x39f3d;
+			@0x3a43c const_type : root_die_with_sticky_types [
+			type = @0x3a3f2
+			];
+			
+		};
+		@0x3a442 subprogram root_die_with_sticky_types [
+			artificial = true,
+			declaration = true,
+			object_pointer = @0x3a450
+			] {
+			@0x3a450 formal_parameter : @0x39f31 [
+			artificial = true
+			];
+			
+		};
+		@0x3a456 subprogram is_sticky : bool [
+			low_pc = 0x1ceb6,
+			high_pc = 37u,
+			containing_type = @0x3a3f2,
+			decl_column = 8u,
+			frame_base = {
+			call_frame_cfa;
+			},
+			type = @0x24bc0,
+			virtuality = 1u,
+			vtable_elem_location = {
+			constu(3);
+			},
+			object_pointer = @0x3a485
+			] {
+			@0x3a485 formal_parameter this : @0x39f31 [
+				location = {
+				fbreg(18446744073709551592);
+				},
+				artificial = true
+			];
+			@0x3a491 formal_parameter d : @0x39f43 [
+				location = {
+				fbreg(18446744073709551584);
+				},
+				decl_column = 38u
+			];
+			
+		};
+		@0x3a49f subprogram \~root_die_with_sticky_types [
+			containing_type = @0x3a3f2,
+			inline = 2u,
+			artificial = true,
+			virtuality = 1u,
+			object_pointer = @0x3a4b3
+			] {
+			@0x3a4b3 formal_parameter this : @0x39f31 [
+			artificial = true
+			];
+			@0x3a4bc const_type : @0x39f31;
+			@0x3a4c1 formal_parameter __in_chrg : int [
+				artificial = true,
+				type = @0x240d1
+			];
+			
+		};
+		@0x3a4cb subprogram root_die_with_sticky_types [
+			inline = 2u,
+			artificial = true,
+			object_pointer = @0x3a4da
+			] {
+			@0x3a4da formal_parameter this : @0x39f31 [
+			artificial = true
+			];
+			@0x3a4e3 formal_parameter : int [
+			type = @0x240c9
+			];
+			
+		};
+		@0x3a4e9 subprogram [
+			low_pc = 0x1cedc,
+			high_pc = 49u,
+			abstract_origin = @0x3a4cb,
+			frame_base = {
+			call_frame_cfa;
+			},
+			object_pointer = @0x3a509
+			] {
+			@0x3a509 formal_parameter [
+				location = {
+				fbreg(18446744073709551592);
+				},
+				abstract_origin = @0x3a4da
+			];
+			@0x3a511 formal_parameter [
+				location = {
+				fbreg(18446744073709551588);
+				},
+				abstract_origin = @0x3a4e3
+			];
+			
+		};
+		@0x3a51a subprogram [
+			low_pc = 0x1dd34,
+			high_pc = 41u,
+			abstract_origin = @0x3a49f,
+			frame_base = {
+			call_frame_cfa;
+			},
+			object_pointer = @0x3a53a
+			] {
+			@0x3a53a formal_parameter [
+				location = {
+				fbreg(18446744073709551592);
+				},
+				abstract_origin = @0x3a4b3
+			];
+			
+		};
+		@0x3a543 subprogram [
+			low_pc = 0x1dd5e,
+			high_pc = 43u,
+			abstract_origin = @0x3a49f,
+			frame_base = {
+			call_frame_cfa;
+			},
+			object_pointer = @0x3a55f
+			] {
+			@0x3a55f formal_parameter [
+				location = {
+				fbreg(18446744073709551592);
+				},
+				abstract_origin = @0x3a4b3
+			];
+			
+		};
+		
+	};
+	@0x3a5c9 structure_type \<lambda\(const\ dwarf\:\:core\:\:iterator_base\&\)\> [
+		byte_size = 56u,
+		decl_column = 38u
+		] {
+		@0x3a5d6 subprogram \~\<lambda\> [
+			inline = 2u,
+			artificial = true,
+			object_pointer = @0x3a5e5
+			] {
+			@0x3a5e5 formal_parameter this : @0x39a83 [
+			artificial = true
+			];
+			@0x3a5ee formal_parameter __in_chrg : int [
+				artificial = true,
+				type = @0x240d1
+			];
+			
+		};
+		@0x3a5f8 member __element_names : set\<std\:\:__cxx11\:\:basic_string\<char\,\ std\:\:char_traits\<char\>\,\ std\:\:allocator\<char\>\ \>\,\ std\:\:less\<std\:\:__cxx11\:\:basic_string\<char\,\ std\:\:char_traits\<char\>\,\ std\:\:allocator\<char\>\ \>\ \>\,\ std\:\:allocator\<std\:\:__cxx11\:\:basic_string\<char\,\ std\:\:char_traits\<char\>\,\ std\:\:allocator\<char\>\ \>\ \>\ \> [
+			data_member_location = {
+			plus_uconst(0);
+			},
+			decl_column = 4u,
+			type = @0x19a87
+		];
+		@0x3a605 member __named_element_dies : @0x398b0 [
+			data_member_location = {
+			plus_uconst(48);
+			},
+			decl_column = 20u
+		];
+		@0x3a612 subprogram operator\(\) : bool [
+			low_pc = 0x1cf0e,
+			high_pc = 1192u,
+			artificial = true,
+			frame_base = {
+			call_frame_cfa;
+			},
+			type = @0x24bc0,
+			object_pointer = @0x3a63b
+			] {
+			@0x3a636 const_type : \<lambda\(const\ dwarf\:\:core\:\:iterator_base\&\)\> [
+			type = @0x3a5c9
+			];
+			@0x3a63b formal_parameter __closure : @0x39a8e [
+				location = {
+				fbreg(18446744073709551160);
+				},
+				artificial = true
+			];
+			@0x3a648 const_type : @0x39a8e;
+			@0x3a64d formal_parameter i : @0x3708c [
+				location = {
+				fbreg(18446744073709551152);
+				},
+				decl_column = 61u
+			];
+			
+		};
+		@0x3a6ac subprogram \<lambda\> [
+			inline = 2u,
+			artificial = true,
+			object_pointer = @0x3a6bb
+			] {
+			@0x3a6bb formal_parameter this : @0x39a83 [
+			artificial = true
+			];
+			@0x3a6c4 formal_parameter : @0x41f74;
+			
+		};
+		@0x3a6ca subprogram \<lambda\> [
+			inline = 2u,
+			artificial = true,
+			object_pointer = @0x3a6d9
+			] {
+			@0x3a6d9 formal_parameter this : @0x39a83 [
+			artificial = true
+			];
+			@0x3a6e2 formal_parameter : @0x39c1b;
+			
+		};
+		@0x3a6e8 subprogram [
+			low_pc = 0x1d3b6,
+			high_pc = 27u,
+			abstract_origin = @0x3a5d6,
+			frame_base = {
+			call_frame_cfa;
+			},
+			object_pointer = @0x3a708
+			] {
+			@0x3a708 formal_parameter [
+				location = {
+				fbreg(18446744073709551592);
+				},
+				abstract_origin = @0x3a5e5
+			];
+			
+		};
+		@0x3a711 subprogram [
+			low_pc = 0x1d3d2,
+			high_pc = 54u,
+			abstract_origin = @0x3a6ca,
+			frame_base = {
+			call_frame_cfa;
+			},
+			object_pointer = @0x3a731
+			] {
+			@0x3a731 formal_parameter [
+				location = {
+				fbreg(18446744073709551592);
+				},
+				abstract_origin = @0x3a6d9
+			];
+			@0x3a739 formal_parameter [
+				location = {
+				fbreg(18446744073709551584);
+				},
+				abstract_origin = @0x3a6e2
+			];
+			
+		};
+		@0x3a742 subprogram [
+			low_pc = 0x1dc36,
+			high_pc = 54u,
+			abstract_origin = @0x3a6ac,
+			frame_base = {
+			call_frame_cfa;
+			},
+			object_pointer = @0x3a75e
+			] {
+			@0x3a75e formal_parameter [
+				location = {
+				fbreg(18446744073709551592);
+				},
+				abstract_origin = @0x3a6bb
+			];
+			@0x3a766 formal_parameter [
+				location = {
+				fbreg(18446744073709551584);
+				},
+				abstract_origin = @0x3a6c4
+			];
+			
+		};
+		
+	};
+	
+};
+
