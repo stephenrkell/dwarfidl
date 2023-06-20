@@ -174,7 +174,7 @@ namespace tool {
 	}
 
 	pair<string, bool>
-	cxx_generator_from_dwarf::cxx_declarator_from_type_die(
+	cxx_generator_from_dwarf::cxx_decl_from_type_die(
 		iterator_df<type_die> p_d, 
 		optional<string> infix_typedef_name/*= optional<string>()*/,
 		bool use_friendly_names /*= true*/,  
@@ -199,11 +199,11 @@ namespace tool {
 				 = p_d.as_a<reference_type_die>();
 				assert(reference);
 				assert(reference->get_type());
-				auto declarator = cxx_declarator_from_type_die(
+				auto decl = cxx_decl_from_type_die(
 						reference->get_type(), optional<string>(),
 						use_friendly_names, extra_prefix, 
 							use_struct_and_union_prefixes);
-				return make_pair(declarator.first + "&", declarator.second);
+				return make_pair(decl.first + "&", decl.second);
 			}
 			case DW_TAG_pointer_type: {
 				iterator_df<pointer_type_die> pointer 
@@ -213,23 +213,23 @@ namespace tool {
 //					if (pointer->get_type().tag_here() == DW_TAG_subroutine_type)
 //					{
 //						// we have a pointer to a subroutine type -- pass on the infix name
-						auto declarator = cxx_declarator_from_type_die(
+						auto decl = cxx_decl_from_type_die(
 							pointer->get_type(), 
 							!infix_typedef_name ? optional<string>() : "*" + *infix_typedef_name,
 							use_friendly_names, extra_prefix,
 							use_struct_and_union_prefixes);
-						if (!declarator.second) return make_pair(declarator.first + "*", false);
-						else return make_pair(declarator.first, true);
-						//return make_pair(declarator.first + "*", declarator.second);
+						if (!decl.second) return make_pair(decl.first + "*", false);
+						else return make_pair(decl.first, true);
+						//return make_pair(decl.first + "*", decl.second);
 // 					}
 // 					else 
 // 					{
 // 						// Q. Why don't we pass on the infix name here too?
-// 						auto declarator = cxx_declarator_from_type_die(
+// 						auto decl = cxx_decl_from_type_die(
 // 							pointer->get_type(), optional<string>(),
 // 							use_friendly_names, extra_prefix, 
 // 							use_struct_and_union_prefixes);
-// 						return make_pair(declarator.first + "*", declarator.second);
+// 						return make_pair(decl.first + "*", decl.second);
 // 					}
 				}
 				else return make_pair("void *", false);
@@ -246,7 +246,7 @@ namespace tool {
 				auto array_size = arr->element_count();
 				ostringstream arrsize; 
 				if (array_size) arrsize << *array_size;
-				return make_pair(cxx_declarator_from_type_die(arr->get_type(), 
+				return make_pair(cxx_decl_from_type_die(arr->get_type(), 
 							optional<string>(), 
 							use_friendly_names, extra_prefix, 
 							use_struct_and_union_prefixes).first
@@ -261,7 +261,7 @@ namespace tool {
 				iterator_df<type_describing_subprogram_die> subroutine_type 
 				 = p_d.as_a<type_describing_subprogram_die>();
 				s << (subroutine_type->get_type() 
-					? cxx_declarator_from_type_die(subroutine_type->get_type(),
+					? cxx_decl_from_type_die(subroutine_type->get_type(),
 					optional<string>(), 
 							use_friendly_names, extra_prefix, 
 							use_struct_and_union_prefixes
@@ -277,7 +277,7 @@ namespace tool {
 					switch (i_child.tag_here())
 					{
 						case DW_TAG_formal_parameter:
-							s << cxx_declarator_from_type_die( 
+							s << cxx_decl_from_type_die( 
 									i_child.as_a<formal_parameter_die>()->get_type(),
 										optional<string>(), 
 										use_friendly_names, extra_prefix, 
@@ -323,13 +323,13 @@ namespace tool {
 				if (!chained_type) return make_pair("void" + qualifier_suffix, false);
 				else if (cxx_type_can_be_qualified(chained_type))
 				{
-					auto declarator = cxx_declarator_from_type_die(
+					auto decl = cxx_decl_from_type_die(
 						chained_type, 
 						infix_typedef_name,
 						use_friendly_names, extra_prefix, 
 						use_struct_and_union_prefixes
 						);
-					return make_pair(declarator.first + qualifier_suffix, declarator.second);
+					return make_pair(decl.first + qualifier_suffix, decl.second);
 				}
 				else 
 				{
@@ -500,7 +500,7 @@ namespace tool {
 	{
 // 		try
 // 		{
-			return cxx_declarator_from_type_die(p_d, 
+			return cxx_decl_from_type_die(p_d, 
 				infix_typedef_name,
 				use_friendly_names);
 // 		} 
@@ -579,11 +579,11 @@ namespace tool {
 
 		// make sure that if we're going to throw an exception, we do it before
 		// we write any output.
-		auto declarator = name_for_type(p_d, name_to_use);
+		auto decl = name_for_type(p_d, name_to_use);
 		out << "typedef " 
-			<< protect_ident(declarator.first);
+			<< protect_ident(decl.first);
 		// HACK: we use the infix for subroutine types
-		if (!declarator.second)
+		if (!decl.second)
 		{
 			out << " "
 				<< protect_ident(name_to_use);
@@ -637,11 +637,11 @@ namespace tool {
 			
 			if (i_fp->get_type())
 			{
-				auto declarator = (i_fp.name_here())
+				auto decl = (i_fp.name_here())
 					? name_for_type(i_fp->get_type(), *i_fp.name_here())
 					: name_for_type(i_fp->get_type());
-				without_rett_s << declarator.first;
-				if (!declarator.second) without_rett_s << " "
+				without_rett_s << decl.first;
+				if (!decl.second) without_rett_s << " "
 					<< (i_fp.name_here() ? *i_fp.name_here() : "");
 				else without_rett_s << "void *" << (i_fp.name_here() ? *i_fp.name_here() : "");
 				written_an_arg = true;
@@ -667,12 +667,12 @@ namespace tool {
 			 * What if we have a function that returns a pointer to a function that
 			 * returns a pointer to a function that...?
 			 */
-			auto declarator = cxx_declarator_from_type_die(
+			auto decl = cxx_decl_from_type_die(
 				rett,
 				without_rett_s.str(),
 				/* use_friendly_names */ true, /* extra_prefix */ string(""),
 				/* use_struct_and_union_prefixes */ true);
-			out << declarator.first;
+			out << decl.first;
 		}
 		if (write_semicolon) out << ";";
 		out << endl;
@@ -935,14 +935,14 @@ namespace tool {
 		 */
 		string name_to_use = cxx_name_from_die(p_d);
 
-		auto declarator = name_for_type(member_type, name_to_use);
+		auto decl = name_for_type(member_type, name_to_use);
 		// (p_d.name_here())
 		//	? name_for_type(member_type, *p_d.name_here())
 		//	: name_for_type(member_type, optional<string>());
 		
-		out << protect_ident(declarator.first);
+		out << protect_ident(decl.first);
 		out	<< " ";
-		if (!declarator.second)
+		if (!decl.second)
 		{
 			out << protect_ident(name_to_use);
 		}
@@ -1177,7 +1177,7 @@ namespace tool {
 		catch (dwarf::expr::Not_supported)
 		{
 			/* This happens when the debug info contains (broken) 
-			 * qualified types that can't be expressed in a single declarator,
+			 * qualified types that can't be expressed in a single decl,
 			 * e.g. (const (array t)). 
 			 * Work around it by getting the name we would have used for a typedef
 			 * of the anonymous DIE defining the typedef'd-to (target) type. 

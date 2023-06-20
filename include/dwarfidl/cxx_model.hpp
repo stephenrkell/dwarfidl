@@ -120,7 +120,7 @@ public:
 	cxx_type_can_have_name(iterator_df<type_die> p_d) const;
 
 	pair<string, bool>
-	cxx_declarator_from_type_die(
+	cxx_decl_from_type_die(
 		iterator_df<type_die> p_d, 
 		optional<string> infix_typedef_name = optional<string>(),
 		bool use_friendly_names = true,
