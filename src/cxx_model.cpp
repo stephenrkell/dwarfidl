@@ -64,7 +64,7 @@ namespace tool {
 			std::move(regex_match(word, e));	
 	}
 	
-	string 
+	string // FIXME: I think liballocstool duplicates this?!
 	cxx_generator::make_valid_cxx_ident(const string& word)
 	{
 		// FIXME: make this robust to illegal characters other than spaces
@@ -177,7 +177,7 @@ namespace tool {
 	cxx_generator_from_dwarf::cxx_decl_from_type_die(
 		iterator_df<type_die> p_d, 
 		optional<string> infix_typedef_name/*= optional<string>()*/,
-		bool use_friendly_names /*= true*/,  
+		bool use_friendly_base_type_names /*= true*/,  
 		optional<string> extra_prefix /* = optional<string>() */,
 		bool use_struct_and_union_prefixes /* = true */ )
 	{
@@ -188,9 +188,9 @@ namespace tool {
 			// return the friendly compiler-determined name or not, depending on argument
 			case DW_TAG_base_type:
 				return make_pair(
-					((!!extra_prefix && !use_friendly_names) ? *extra_prefix : "")
+					((!!extra_prefix && !use_friendly_base_type_names) ? *extra_prefix : "")
 					+ local_name_for(p_d.as_a<base_type_die>(),
-						use_friendly_names),
+						use_friendly_base_type_names),
 					false);
 			case DW_TAG_typedef:
 				return make_pair((!!extra_prefix ? *extra_prefix : "") + *p_d.name_here(), false);
@@ -201,7 +201,7 @@ namespace tool {
 				assert(reference->get_type());
 				auto decl = cxx_decl_from_type_die(
 						reference->get_type(), optional<string>(),
-						use_friendly_names, extra_prefix, 
+						use_friendly_base_type_names, extra_prefix, 
 							use_struct_and_union_prefixes);
 				return make_pair(decl.first + "&", decl.second);
 			}
@@ -216,7 +216,7 @@ namespace tool {
 						auto decl = cxx_decl_from_type_die(
 							pointer->get_type(), 
 							!infix_typedef_name ? optional<string>() : "*" + *infix_typedef_name,
-							use_friendly_names, extra_prefix,
+							use_friendly_base_type_names, extra_prefix,
 							use_struct_and_union_prefixes);
 						if (!decl.second) return make_pair(decl.first + "*", false);
 						else return make_pair(decl.first, true);
@@ -227,7 +227,7 @@ namespace tool {
 // 						// Q. Why don't we pass on the infix name here too?
 // 						auto decl = cxx_decl_from_type_die(
 // 							pointer->get_type(), optional<string>(),
-// 							use_friendly_names, extra_prefix, 
+// 							use_friendly_base_type_names, extra_prefix, 
 // 							use_struct_and_union_prefixes);
 // 						return make_pair(decl.first + "*", decl.second);
 // 					}
@@ -248,7 +248,7 @@ namespace tool {
 				if (array_size) arrsize << *array_size;
 				return make_pair(cxx_decl_from_type_die(arr->get_type(), 
 							optional<string>(), 
-							use_friendly_names, extra_prefix, 
+							use_friendly_base_type_names, extra_prefix, 
 							use_struct_and_union_prefixes).first
 					+ " " + (!!infix_typedef_name ? *infix_typedef_name : "") + "[" 
 					// add size, if we have a subrange type
@@ -263,7 +263,7 @@ namespace tool {
 				s << (subroutine_type->get_type() 
 					? cxx_decl_from_type_die(subroutine_type->get_type(),
 					optional<string>(), 
-							use_friendly_names, extra_prefix, 
+							use_friendly_base_type_names, extra_prefix, 
 							use_struct_and_union_prefixes
 					).first 
 					: string("void "));
@@ -280,7 +280,7 @@ namespace tool {
 							s << cxx_decl_from_type_die( 
 									i_child.as_a<formal_parameter_die>()->get_type(),
 										optional<string>(), 
-										use_friendly_names, extra_prefix, 
+										use_friendly_base_type_names, extra_prefix, 
 										use_struct_and_union_prefixes
 									).first;
 							break;
@@ -326,7 +326,7 @@ namespace tool {
 					auto decl = cxx_decl_from_type_die(
 						chained_type, 
 						infix_typedef_name,
-						use_friendly_names, extra_prefix, 
+						use_friendly_base_type_names, extra_prefix, 
 						use_struct_and_union_prefixes
 						);
 					return make_pair(decl.first + qualifier_suffix, decl.second);
@@ -359,9 +359,9 @@ namespace tool {
 	vector<string> 
 	cxx_generator_from_dwarf::local_name_parts_for(
 		iterator_df<basic_die> p_d,
-		bool use_friendly_names /* = true */)
+		bool use_friendly_base_type_names /* = true */)
 	{ 
-		if (use_friendly_names && p_d.tag_here() == DW_TAG_base_type)
+		if (use_friendly_base_type_names && p_d.tag_here() == DW_TAG_base_type)
 		{
 			auto opt_name = name_for_base_type(p_d.as_a<base_type_die>());
 			if (opt_name) return vector<string>(1, *opt_name);
@@ -496,13 +496,18 @@ namespace tool {
 	cxx_generator_from_dwarf::name_for_type(
 		iterator_df<type_die> p_d, 
 		boost::optional<string> infix_typedef_name /*= none*/,
-		bool use_friendly_names/*= true*/)
+		bool use_friendly_base_type_names/*= true*/,
+		optional<string> extra_prefix /* = optional<string>() */,
+		bool use_struct_and_union_prefixes /* = true */
+	)
 	{
 // 		try
 // 		{
 			return cxx_decl_from_type_die(p_d, 
 				infix_typedef_name,
-				use_friendly_names);
+				use_friendly_base_type_names,
+				extra_prefix,
+				use_struct_and_union_prefixes);
 // 		} 
 // 		catch (dwarf::expr::Not_supported)
 // 		{
@@ -570,23 +575,34 @@ namespace tool {
 	
 	string 
 	cxx_generator_from_dwarf::make_typedef(
-		iterator_df<type_die> p_d,
-		const string& name
+		iterator_df<type_die> p_target,
+		const string& typedef_name
 	)
 	{
 		std::ostringstream out;
-		string name_to_use = cxx_name_from_string(name, "_dwarfhpp_");
+		string name_to_use = cxx_name_from_string(typedef_name, "_dwarfhpp_");
+		// typedefs are named by definition, so only reserved words can cause problems
+		assert(name_to_use == typedef_name || std::find(cxx_reserved_words.begin(),
+			cxx_reserved_words.end(), typedef_name) != cxx_reserved_words.end());
 
-		// make sure that if we're going to throw an exception, we do it before
+		// Make sure that if we're going to throw an exception, we do it before
 		// we write any output.
-		auto decl = name_for_type(p_d, name_to_use);
-		out << "typedef " 
-			<< protect_ident(decl.first);
+		// What if the thing we're typedefing has no name?
+		// We're supposed to invent names (cxx_name_from_die) in that case.
+		// name_for_type just calls cxx_decl_from_type_die,
+		// which seems fishy, especially as we passed it 'name_to_use' as the name
+		auto decl = cxx_decl_from_type_die(p_target,
+				optional<string>(), // <-- this said 'name_to_use' but that seems wrong. We're proposing the typedef name as the name to use
+				/* use_friendly_base_type_names */ true, // FIXME: get this from caller
+				/* extra_prefix */ optional<string>(),
+				/* use_struct_and_union_prefixes */ true); // FIXME: get this from caller
+		
+		//name_for_type(p_target, name_to_use);
+		out << "typedef " << protect_ident(decl.first);
 		// HACK: we use the infix for subroutine types
 		if (!decl.second)
 		{
-			out << " "
-				<< protect_ident(name_to_use);
+			out << " " << protect_ident(name_to_use);
 		}
 		out << ";" << endl;
 		return out.str();
@@ -621,6 +637,7 @@ namespace tool {
 		{
 			out << "extern \"" << lang_to_use << "\" {\n";
 		}
+#if 0
 		ostringstream without_rett_s;
 		
 		auto rett = p_d->get_type();
@@ -666,15 +683,32 @@ namespace tool {
 			/* FIXME: this treatment should be natural and recursive.
 			 * What if we have a function that returns a pointer to a function that
 			 * returns a pointer to a function that...?
+			 *
+			 * here we are saying      R xxx (args1)
+			 *
+			 * where R is of the form  T (*yyy)(args2)
+			 *
+			 * gets infixed like so: with xxx(args1) for yyy
+			 *
+			 * with result    T (*xxx (args1))(args2)
+			 *
+			 * Now what if there are three levels? meaning T is actually
+			 *
+			 *              U (*zzz)(args3)
+			 *
+			 * and we write   U (*(*(xxx)(args1))(args2))(args3)
 			 */
 			auto decl = cxx_decl_from_type_die(
 				rett,
-				without_rett_s.str(),
-				/* use_friendly_names */ true, /* extra_prefix */ string(""),
+				/* infix name */ without_rett_s.str(),
+				/* use_friendly_base_type_names */ true, /* extra_prefix */ string(""),
 				/* use_struct_and_union_prefixes */ true);
 			out << decl.first;
 		}
 		if (write_semicolon) out << ";";
+#endif
+		out << make_declaration_of_type(p_d, name);
+
 		out << endl;
 		if (write_semicolon && wrap_with_extern_lang) 
 		{
@@ -682,6 +716,128 @@ namespace tool {
 		}
 		
 		return out.str();
+	}
+
+	/* FIXME: why is this not replicating exactly what the model is doing,
+	 * with all its template instances?
+	 *
+	 * This is supposed to be a helper, but actually it can declare pretty much
+	 * anything we want. Do we ever want to do more than declare? In noopgen,
+	 * yes, but that is a client that supplies its own logic.
+	 * */
+	string
+	cxx_generator_from_dwarf::make_declaration_of_type(
+		iterator_df<type_die> t,
+		const string& name
+	)
+	{
+	/*
+    (* recurse down if we can *)
+    match d with
+        Pointer(pointeeT) ->
+            let starAndMaybeParenify x t = begin
+                let starred = "*" ^ x in
+                match t with
+                    Subprogram _ | Array _ -> "(" ^ starred ^ ")"
+                  | _ -> starred
+                end
+            in
+            printDecl pointeeT (starAndMaybeParenify ident pointeeT)
+      | Int -> "int " ^ ident
+      | Array(n, t) -> (printDecl t ident) ^ "[" ^ (string_of_int n) ^ "]"
+      | Const(t) -> printDecl t ("const " ^ ident)
+      | Subprogram(rett, argts) ->
+            (printDecl rett (ident ^ "(" ^ (
+               let concat_with_comma s1 s2 = s2 ^ ", " ^ s2 in
+               List.fold_left concat_with_comma ""
+                   (List.map (fun argt -> (printDecl argt "")) argts)
+            ) ^ ")" ))
+
+	 */
+		if (t.is_a<address_holding_type_die>())
+		{
+			auto pointeeT = t.as_a<address_holding_type_die>()->find_type();
+			ostringstream o;
+			bool do_paren = (pointeeT.is_a<type_describing_subprogram_die>()
+			 || pointeeT.is_a<array_type_die>());
+			string op = (t.is_a<pointer_type_die>() ? "*" :
+				         t.is_a<reference_type_die>() ? "&" :
+				         t.is_a<rvalue_reference_type_die>() ? "&&" :
+				         "UNKNOWN ADDRHOLDER FIXME"
+			);
+			if (do_paren) o << "(";
+			o << op << name;
+			if (do_paren) o << ")";
+			string starred_name = o.str();
+			return make_declaration_of_type(pointeeT, starred_name);
+		}
+		else if (!t) /* void */
+		{
+			return "void " + name;
+		}
+		else if (t.is_a<base_type_die>()
+			|| t.is_a<with_data_members_die>()
+			|| t.is_a<enumeration_type_die>()
+			|| t.is_a<typedef_die>())
+		{
+			return name_for_type(t, optional<string>(), true,
+				optional<string>(), true).first + " " + name;
+		}
+		else if (t.is_a<array_type_die>())
+		{
+			auto elT = t.as_a<array_type_die>()->find_type();
+			ostringstream o;
+			o << make_declaration_of_type(elT, name);
+			vector<opt<Dwarf_Unsigned> > elCounts
+			 = t.as_a<array_type_die>()->dimension_element_counts();
+			for (auto maybe_count : elCounts)
+			{
+				o << "[";
+				if (maybe_count) o << *maybe_count;
+				o << "]";
+			}
+			return o.str();
+		}
+		else if (t.is_a<qualified_type_die>())
+		{
+			string qual = (t.is_a<const_type_die>() ? "const" :
+				 t.is_a<volatile_type_die>() ? "volatile" :
+				 t.is_a<restrict_type_die>() ? "restrict" :
+				 "UNKNOWN QUAL FIXME"
+				);
+			auto innerT = t.as_a<qualified_type_die>()->find_type();
+			return make_declaration_of_type(innerT,
+				qual + " " + name);
+		}
+		else if (t.is_a<type_describing_subprogram_die>())
+		{
+			auto rett = t.as_a<type_describing_subprogram_die>()->find_type();
+			ostringstream o;
+			o << name << "(";
+			auto fp_children = t->children().subseq_of<formal_parameter_die>();
+			for (auto i_arg = fp_children.first; i_arg != fp_children.second; ++i_arg)
+			{
+				if (i_arg != fp_children.first) o << ", ";
+				o << make_declaration_of_type(
+						i_arg->find_type(), "");
+			}
+			o << ")";
+			return make_declaration_of_type(
+				rett,
+				o.str()
+			);
+		}
+		else if (t.is_a<subrange_type_die>())
+		{
+			return name_for_type(t.as_a<subrange_type_die>()->get_type(),
+				optional<string>(), true).first
+				+ " " + name;
+		}
+		else /*including if (t.is_a<string_type_die>()) */
+		{
+			assert(false); abort();
+		}
+		assert(false); abort();
 	}
 	
 	template <Dwarf_Half Tag>
@@ -701,7 +857,8 @@ namespace tool {
 	cxx_generator_from_dwarf::recursively_emit_children(
 		indenting_ostream& out,
 		const iterator_base& p_d,
-		const Pred& pred /* = Pred() */
+		const Pred& pred /* = Pred() */,
+		bool add_line_breaks /* = true */
 	)
 	{ 
 		//out.inc_level(); 
@@ -713,13 +870,12 @@ namespace tool {
 			if (!pred(i_child)) continue;
 			
 			// ... and we don't want the newline uness we actually have children
-			if (not_yet_inced) { out.inc_level(); not_yet_inced = false; }
+			if (add_line_breaks && not_yet_inced) { out.inc_level(); not_yet_inced = false; }
 			
-			// emit_mode<0> does a dynamic dispatch on the tag
-			// (could really be a separate function, rather than the <0> specialization)
+			// dynamic dispatch on the tag
 			dispatch_to_model_emitter(out, i_child);
 		}
-		if (!not_yet_inced) out.dec_level(); 
+		if (add_line_breaks && !not_yet_inced) out.dec_level(); 
 	}
 
 	// define specializations here
@@ -784,15 +940,16 @@ namespace tool {
 		 * then unspecified parameters,
 		 * then others. */
 		recursively_emit_children(out, i_d, 
-			[](iterator_df<basic_die> p){ return p.tag_here() == DW_TAG_formal_parameter; }
-		);
+			[](iterator_df<basic_die> p){ return p.tag_here() == DW_TAG_formal_parameter; },
+			false);
 		recursively_emit_children(out, i_d, 
-			[](iterator_df<basic_die> p){ return p.tag_here() == DW_TAG_unspecified_parameters; }
-		);
-		recursively_emit_children(out, i_d, 
+			[](iterator_df<basic_die> p){ return p.tag_here() == DW_TAG_unspecified_parameters; },
+			false);
+		recursively_emit_children(out, i_d,
 			[](iterator_df<basic_die> p){ 
 				return p.tag_here() != DW_TAG_unspecified_parameters
-				    && p.tag_here() != DW_TAG_formal_parameter; }
+				    && p.tag_here() != DW_TAG_formal_parameter; },
+			false
 		);
 		
 		// end the prototype
@@ -806,15 +963,24 @@ namespace tool {
 	{
 		auto p_d = i_d.as_a<formal_parameter_die>();
 	
-		// recover arg position
+		// recover arg position (XXX: how to make this unnecessary?)
 		int argpos = 0;
-		auto p_subp = i_d.parent().as_a<subprogram_die>();
+		auto p_subp = i_d.parent().as_a<program_element_die>();
 
 		auto fps = p_subp->children().subseq_of<formal_parameter_die>();
-		auto i = fps.first;
+		// XXX NASTY: if we use "auto" here, this does not work and 'argpos' counts to infinite.
+		iterator_sibs<formal_parameter_die> i = fps.first;
 		while (i != fps.second
 			&& i->get_offset() != i_d.offset_here())
-		{ argpos++; i++; }
+		{
+		// debugging
+			cerr << "our offset is " << std::hex << i_d.offset_here()
+			<< "; we are not arg " << std::dec << argpos << "(offset " << std::hex << i.offset_here()
+			//<< ") nor the last arg (offset " << std::hex << fps.second.offset_here()
+			<< ")" << std::dec << endl;
+		// end debugging
+			++argpos; ++i; 
+		}
 		// we should find ourselves
 		assert(i != fps.second);
 

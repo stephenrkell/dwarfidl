@@ -48,7 +48,7 @@ using boost::optional;
 using srk31::indenting_ostream;
 
 /** This class contains generally useful stuff for generating C++ code.
- *  It should be free from DWARF details. */
+ *  It should be free from DWARF details. FIXME: move it to libcxxgen. */
 class cxx_generator
 {
 public:
@@ -76,8 +76,7 @@ public:
 	cxx_generator_from_dwarf() : p_spec(&spec::DEFAULT_DWARF_SPEC) {}
 	cxx_generator_from_dwarf(const spec::abstract_def& s) : p_spec(&s) {}
 
-
-	bool is_builtin(iterator_df<> p_d);
+	bool is_builtin(iterator_df<> p_d); // FIXME: belongs with compiler? no because DWARFy
 
 	string 
 	name_for(iterator_df<type_die> t) 
@@ -141,7 +140,10 @@ public:
 	name_for_type(
 		iterator_df<type_die> p_d, 
 		optional<string> infix_typedef_name = optional<string>(),
-		bool use_friendly_names = true);
+		bool use_friendly_names = true,
+		optional<string> extra_prefix = optional<string>(),
+		bool use_struct_and_union_prefixes = true
+		);
 
 	string 
 	name_for_argument(
@@ -160,6 +162,12 @@ public:
 		const string& name,
 		bool write_semicolon = true,
 		bool wrap_with_extern_lang = true
+	);
+
+	string
+	make_declaration_of_type(
+		iterator_df<type_die> p_d,
+		const string& name
 	);
 
 	string 
@@ -201,7 +209,8 @@ protected:
 	recursively_emit_children(
 		indenting_ostream& out,
 		const iterator_base& i_d,
-		const Pred& pred = Pred()
+		const Pred& pred = Pred(),
+		bool add_line_breaks = true
 	);
 };
 
@@ -283,7 +292,9 @@ template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subrange_type>      
 		}
 	}
 
-/** This class supports generation of C++ code targetting a particular C++ compiler. */
+/** This class supports generation of C++ code targetting a particular C++ compiler
+ *  (including any command-line options that are relevant to codegen).
+ *  It uses DWARF only to understand the base types of the compiler. */
 class cxx_target : public cxx_generator_from_dwarf, public cxx_compiler
 {
 public:

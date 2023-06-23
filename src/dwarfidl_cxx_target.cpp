@@ -33,6 +33,7 @@ using dwarf::core::root_die;
 using dwarf::core::compile_unit_die;
 using dwarf::core::with_data_members_die;
 using dwarf::core::program_element_die;
+using dwarf::spec::opt;
 
 namespace dwarf { namespace tool {
 
@@ -105,7 +106,13 @@ void dwarfidl_cxx_target::emit_all_decls(root_die& r)
 void dwarfidl_cxx_target::emit_decls(const set<iterator_base>& dies)
 {
 	/* We now don't bother doing the topological sort, so we just
-	 * forward-declare everything that we can. */
+	 * forward-declare everything that we can.
+	 * PROBLEM: anything can depend on a typedef, and
+	 * typedefs can depend on typedefs.
+	 * Instead of a topsort we can probably just do a fixed-point
+	 * iteration: emit anything whose dependencies have been emitted,
+	 * and keep doing that until nothing is left.
+	 */
 	set<iterator_base> to_fd;
 	for (auto i_i_d = dies.begin(); i_i_d != dies.end(); ++i_i_d)
 	{
@@ -117,101 +124,181 @@ void dwarfidl_cxx_target::emit_decls(const set<iterator_base>& dies)
 	}
 	emit_forward_decls(to_fd);
 	
-	set<iterator_base> emitted;
+	// FIXMEs:
+	// - not emitting named function typedefs (make_precise_fn_t)
+	// - function arguments going astray entirely: __lookup_bigalloc_top_level, mmap, ...
+	// - typedefs of arrays are coming out wrong
+	// - extra parens around non-pointed functions?
+	// - bitfields not coming out
+	// - spurious warning message for unions
+	// - enumeration coming out with leading comma (addr_discipl_t)
+	// - redundant "aligned(1)" attribute for fields that are on the ABI alignment
+	// - C vs C++ issues: struct tags, "_Bool", etc.
+	// - nameless function typedefs after big_allocation (3805..31e6)
 	
-	for (auto i_i_d = dies.begin(); i_i_d != dies.end(); ++i_i_d)
-	{
-		auto i_d = *i_i_d;
-		// o = (*i)->get_offset();
-		//if (!spec::file_toplevel_die::is_visible()(p_d)) continue; 
-		dispatch_to_model_emitter( 
-			out,
-			i_d,
-			// this is our predicate
-			[/*&toplevel_decls_emitted, */&emitted, this](iterator_base i)
+	set<iterator_base> emitted;
+	auto can_emit_now = [](iterator_base i) -> bool {
+		set< iterator_df<type_die> > dependencies;
+		auto collect_named_dependencies = [&dependencies, collect_named_dependencies](iterator_base i) {
+			// if it's forward-declared, we don't bother counting it as a dependency
+			if (i.is_a<with_data_members_die>() && i.name_here()) return;
+			if (i.is_a<base_type_die>()) return; // base types are always available
+			if (i.is_a<type_chain_die>())
+			{ collect_named_dependencies(i.as_a<type_chain_die>()->find_type()); }
+			else if (i.is_a<variable_die>())
+			{ collect_named_dependencies((i.as_a<variable_die>()->find_type()); }
+			else if (i.is_a<with_data_members_die>()) // anonymous case
 			{
-// 					/* We check whether we've been declared already */
-// 					auto opt_ident_path = p_d->ident_path_from_cu();
-// 					if (opt_ident_path && opt_ident_path->size() == 1)
-// 					{
-// 						auto found = toplevel_decls_emitted.find(*opt_ident_path);
-// 						if (found != toplevel_decls_emitted.end())
-// 						{
-// 							/* This means we would be redecling if we emitted here. */
-// 							auto current_is_type
-// 							 = dynamic_pointer_cast<spec::type_die>(p_d);
-// 							auto previous_is_type
-// 							 = dynamic_pointer_cast<spec::type_die>(found->second);
-// 							auto print_name_parts = [](const vector<string>& ident_path)
-// 							{
-// 								for (auto i_name_part = ident_path.begin();
-// 									i_name_part != ident_path.end(); ++i_name_part)
-// 								{
-// 									if (i_name_part != ident_path.begin()) cerr << " :: ";
-// 									cerr << *i_name_part;
-// 								}
-// 							};
-// 							
-// 							/* In the case of types, we output a warning. */
-// 							if (current_is_type && previous_is_type)
-// 							{
-// 								if (!current_is_type->is_rep_compatible(previous_is_type)
-// 								||  !previous_is_type->is_rep_compatible(current_is_type))
-// 								{
-// 									cerr << "Warning: saw rep-incompatible types with "
-// 											"identical toplevel names: ";
-// 									print_name_parts(*opt_ident_path);
-// 									cerr << endl;
-// 								}
-// 							}
-// 							// we should skip this
-// 							cerr << "Skipping redeclaration of DIE ";
-// 							//print_name_parts(*opt_ident_path);
-// 							cerr << p_d->summary();
-// 							cerr << " already emitted as " 
-// 								<< *toplevel_decls_emitted[*opt_ident_path]
-// 								<< endl;
-// 							return false;
-// 						}
-// 						
-// 						/* At this point, we are going to give the all clear to emit.
-// 						 * But we want to remember this, so we can skip future redeclarations
-// 						 * that might conflict. */
-// 						
-// 						/* Some declarations are harmless to emit, because they never 
-// 						 * conflict (forward decls). We won't bother remembering these. */
-// 						auto as_program_element
-// 						 = i.as_a<program_element_die>();
-// 						bool is_harmless_fwddecl = as_program_element
-// 							&& as_program_element->get_declaration()
-// 							&& *as_program_element->get_declaration();
-// 						
-// 						// if we got here, we will go ahead with emitting; 
-// 						// if it generates a name, remember this!
-// 						// NOTE that dwarf info has been observed to contain things like
-// 						// DW_TAG_const_type, type structure (see evcnt in librump.o)
-// 						// where the const type and the structure have the same name.
-// 						// We won't use the name on the const type, so we use the
-// 						// cxx_type_can_have_name helper to rule those cases out.
-// 						auto is_type = i.as_a<type_die>();
-// 						if (
-// 							(!is_type || (is_type && this->cxx_type_can_have_name(is_type)))
-// 						&&  !is_harmless_fwddecl
-// 						)
-// 						{
-// 							// toplevel_decls_emitted.insert(make_pair(*opt_ident_path, i));
-// 						}
-// 					} // end if already declared with this 
-
-				// we remember what we've okayed and never okay the same thing twice
-				if (emitted.find(i) == emitted.end())
+				// what about the with-data-members itself? no, it's not named
+				// (In practice, we may give it a name. And if we do, anything
+				// depending on it 
+				auto children = i.children().subseq_of<member_die>()
+				for (auto i_child = children.first; i_child != children.second; ++i_child)
 				{
-					emitted.insert(i);
-					return true;
-				} else return false;
+					add_dependency(i_child->find_type());
+				}
 			}
-		); 
-	} 
+			else if (i.is_a<type_describing_subprogram_die>())
+			{
+				if (i.as_a<type_describing_subprogram_die>()->get_type())
+				{
+					collect_named_dependencies(i.as_a<type_describing_subprogram_die>()->find_type());
+				}
+				auto children = i.children().subseq_of<member_die>()
+				for (auto i_child = children.first; i_child != children.second; ++i_child)
+				{
+					collect_named_dependencies(i_child->find_type());
+				}
+			}
+			else { /* what goes here? */ }
+		};
+
+			if (i.is_a<type_chain_die>()) add_dependency(
+			// array types etc: 
+			dependencies.insert(i);
+		};
+		// gather dependencies
+		/* Now test whether all dependencies are emitted. */
+		for (auto i_dep = dependencies.begin(); i_dep != dependencies.end(); ++i_dep)
+		{
+			if (emitted.find(i_dep) == emitted.end()) return false;
+		}
+		return true;
+	};
+	multimap< vector<opt<string > >, iterator_base > emitted_by_path;
+	auto pred = [&emitted_by_path, &emitted, this](iterator_base i) -> bool {
+		/* We check whether exactly we have been declared already */
+		if (emitted.find(i) != emitted.end()) return false;
+		/* Also check whether something of this name has been declared already. */
+		vector< opt<string> > ident_path;
+		bool path_is_complete = true;
+		for (iterator_df<> p = i; p.is_a<compile_unit_die>(); p = p.parent())
+		{
+			auto maybe_name = i.name_here();
+			path_is_complete &= !!maybe_name;
+			ident_path.push_back(maybe_name);
+		}
+		if (path_is_complete && ident_path.size() == 1)
+		{
+			auto found = emitted_by_path.equal_range(ident_path);
+			if (found.first != found.second)
+			{
+				/* This means we would be redecling if we emitted here. */
+				auto &previous = found.first->second;
+				auto &current = i;
+				auto print_name_parts = [](const vector<opt<string> >& ident_path)
+				{
+					for (auto i_name_part = ident_path.begin();
+						i_name_part != ident_path.end(); ++i_name_part)
+					{
+						if (i_name_part != ident_path.begin()) cerr << " :: ";
+						cerr << (*i_name_part ? **i_name_part : "(anonymous)");
+					}
+				};
+				/* In the case of types, we output a warning. */
+				if (current.is_a<type_die>() && previous.is_a<type_die>())
+				{
+					if (current.as_a<type_die>()->summary_code() != 
+					previous.as_a<type_die>()->summary_code())
+					{
+						cerr << "Warning: saw rep-incompatible types with "
+								"identical toplevel names: ";
+						print_name_parts(ident_path);
+						cerr << endl;
+					}
+				}
+				// we should skip this
+				cerr << "Skipping redeclaration of DIE named ";
+				print_name_parts(ident_path);
+				cerr << i.summary();
+				cerr << " already emitted as "
+					<< previous.summary()
+					<< endl;
+				return false;
+			}
+
+			/* At this point, we are going to give the all clear to emit.
+			 * But we want to remember this, so we can skip future redeclarations
+			 * that might conflict. */
+
+			/* Some declarations are harmless to emit, because they never 
+			 * conflict (forward decls). We won't bother remembering these. */
+			auto as_program_element
+			 = i.as_a<program_element_die>();
+			bool is_harmless_fwddecl = as_program_element
+				&& as_program_element->get_declaration()
+				&& *as_program_element->get_declaration();
+
+			// if we got here, we will go ahead with emitting;
+			// if it generates a name, remember this!
+			// NOTE that dwarf info has been observed to contain things like
+			// DW_TAG_const_type, type structure (see evcnt in librump.o)
+			// where the const type and the structure have the same name.
+			// We won't use the name on the const type, so we use the
+			// cxx_type_can_have_name helper to rule those cases out.
+			auto is_type = i.as_a<type_die>();
+			if (
+				(!is_type || (is_type && this->cxx_type_can_have_name(is_type)))
+			&&  !is_harmless_fwddecl
+			)
+			{
+				// toplevel_decls_emitted.insert(make_pair(*opt_ident_path, i));
+			}
+		} // end if path is complete and size 1
+		// we remember what we've okayed and never okay the same thing twice
+		emitted.insert(i);
+		emitted_by_path.insert(make_pair(ident_path, i));
+		return true;
+	};
+	auto i_i_d = dies.begin();
+	while (!dies.empty())
+	{
+		auto i_i_d = dies.begin();
+		bool removed_one = false;
+		while (i_i_d != dies.end())
+		{
+			auto i_d = *i_i_d;
+			// only emit if dependencies allow
+			if (can_emit_now(i_d))
+			{
+				cerr << "Now dispatching " << i_d.summary() << endl;
+				// o = (*i)->get_offset();
+				//if (!spec::file_toplevel_die::is_visible()(p_d)) continue; 
+				dispatch_to_model_emitter(
+					out,
+					i_d,
+					// this is our predicate
+					pred
+					);
+				// remove what we emit
+				i_i_d = dies.erase(i_i_d);
+				removed_one = true;
+			}
+			else ++i_i_d;
+		}
+		assert(removed_one);
+		// we go around again
+	}
 }
 
 } } // end namespace dwarf::tool

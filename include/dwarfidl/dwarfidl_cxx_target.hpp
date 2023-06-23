@@ -12,6 +12,13 @@ using std::vector;
 using namespace dwarf;
 using namespace dwarf::lib;
 
+/* Think of this class as the reusable base for
+ * dwarfhpp, noopgen, and any similar tools.
+ * But what does it do? It wraps cxx_target, supplying
+ * some unimportant stuff (untyped_argument_typename)
+ * and handles the topsort-alike handling of forward declarations
+ * and other inter-declaration dependencies. */
+
 class dwarfidl_cxx_target : public cxx_target
 {
 	const string m_untyped_argument_typename;
