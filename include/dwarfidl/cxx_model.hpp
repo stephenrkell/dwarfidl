@@ -38,6 +38,7 @@ using dwarf::core::subprogram_die;
 using dwarf::core::subroutine_type_die;
 using dwarf::core::type_describing_subprogram_die;
 using dwarf::core::formal_parameter_die;
+using dwarf::spec::opt;
 
 using std::cerr;
 using std::vector;
@@ -121,9 +122,9 @@ public:
 	pair<string, bool>
 	cxx_decl_from_type_die(
 		iterator_df<type_die> p_d, 
-		optional<string> infix_typedef_name = optional<string>(),
+		spec::opt<string> infix_typedef_name = spec::opt<string>(),
 		bool use_friendly_names = true,
-		optional<string> extra_prefix = optional<string>(),
+		spec::opt<string> extra_prefix = spec::opt<string>(),
 		bool use_struct_and_union_prefixes = true
 	);
 
@@ -164,10 +165,11 @@ public:
 		bool wrap_with_extern_lang = true
 	);
 
-	string
+	std::ostringstream
 	make_declaration_of_type(
 		iterator_df<type_die> p_d,
-		const string& name
+		const std::ostringstream& name_in,
+		std::function< opt<string>(iterator_base) > const& namer
 	);
 
 	string 

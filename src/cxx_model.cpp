@@ -176,173 +176,65 @@ namespace tool {
 	pair<string, bool>
 	cxx_generator_from_dwarf::cxx_decl_from_type_die(
 		iterator_df<type_die> p_d, 
-		optional<string> infix_typedef_name/*= optional<string>()*/,
+		opt<string> maybe_name/*= opt<string>()*/,
 		bool use_friendly_base_type_names /*= true*/,  
-		optional<string> extra_prefix /* = optional<string>() */,
+		opt<string> extra_prefix /* = opt<string>() */,
 		bool use_struct_and_union_prefixes /* = true */ )
 	{
-		string name_prefix;
-		string qualifier_suffix;
-		switch (p_d.tag_here())
+		struct default_namer
+		 : public std::ostringstream, public std::function< opt<string>(iterator_base) >
 		{
-			// return the friendly compiler-determined name or not, depending on argument
-			case DW_TAG_base_type:
-				return make_pair(
-					((!!extra_prefix && !use_friendly_base_type_names) ? *extra_prefix : "")
-					+ local_name_for(p_d.as_a<base_type_die>(),
-						use_friendly_base_type_names),
-					false);
-			case DW_TAG_typedef:
-				return make_pair((!!extra_prefix ? *extra_prefix : "") + *p_d.name_here(), false);
-			case DW_TAG_reference_type: {
-				iterator_df<reference_type_die> reference 
-				 = p_d.as_a<reference_type_die>();
-				assert(reference);
-				assert(reference->get_type());
-				auto decl = cxx_decl_from_type_die(
-						reference->get_type(), optional<string>(),
-						use_friendly_base_type_names, extra_prefix, 
-							use_struct_and_union_prefixes);
-				return make_pair(decl.first + "&", decl.second);
-			}
-			case DW_TAG_pointer_type: {
-				iterator_df<pointer_type_die> pointer 
-				 = p_d.as_a<pointer_type_die>();
-				if (pointer->get_type())
+			opt<string> extra_prefix;
+			bool use_friendly_base_type_names;
+			bool use_struct_and_union_prefixes;
+			default_namer(cxx_generator_from_dwarf &gen,
+				bool use_friendly_base_type_names,
+				opt<string> extra_prefix,
+				bool use_struct_and_union_prefixes
+			) : function([&gen, this,
+				extra_prefix, use_friendly_base_type_names,
+				use_struct_and_union_prefixes](iterator_base i) -> opt<string> {
+				string name_prefix;
+				// the null DIE reference represents type void
+				if (!i) return string("void");// + gen.cxx_name_from_die(i);
+				switch (i.tag_here())
 				{
-//					if (pointer->get_type().tag_here() == DW_TAG_subroutine_type)
-//					{
-//						// we have a pointer to a subroutine type -- pass on the infix name
-						auto decl = cxx_decl_from_type_die(
-							pointer->get_type(), 
-							!infix_typedef_name ? optional<string>() : "*" + *infix_typedef_name,
-							use_friendly_base_type_names, extra_prefix,
-							use_struct_and_union_prefixes);
-						if (!decl.second) return make_pair(decl.first + "*", false);
-						else return make_pair(decl.first, true);
-						//return make_pair(decl.first + "*", decl.second);
-// 					}
-// 					else 
-// 					{
-// 						// Q. Why don't we pass on the infix name here too?
-// 						auto decl = cxx_decl_from_type_die(
-// 							pointer->get_type(), optional<string>(),
-// 							use_friendly_base_type_names, extra_prefix, 
-// 							use_struct_and_union_prefixes);
-// 						return make_pair(decl.first + "*", decl.second);
-// 					}
+					// return the friendly compiler-determined name or not, depending on argument
+					case DW_TAG_base_type:
+						return ((!!extra_prefix && !use_friendly_base_type_names) ? *extra_prefix : "")
+							+ gen.local_name_for(i.as_a<base_type_die>(),
+								use_friendly_base_type_names);
+					case DW_TAG_typedef:
+						return (!!extra_prefix ? *extra_prefix : "") + *i.name_here();
+					case DW_TAG_structure_type:
+						if (use_struct_and_union_prefixes) name_prefix = "struct ";
+						goto handle_named_type;
+					case DW_TAG_union_type:
+						if (use_struct_and_union_prefixes) name_prefix = "union ";
+						goto handle_named_type;
+					case DW_TAG_class_type:
+						if (use_struct_and_union_prefixes) name_prefix = "class ";
+						goto handle_named_type;
+					case DW_TAG_enumeration_type:
+						if (use_struct_and_union_prefixes) name_prefix = "enum ";
+						goto handle_named_type;
+					handle_named_type:
+						return (!!extra_prefix ? *extra_prefix : "") + name_prefix + gen.cxx_name_from_die(i);
+					default:
+						return opt<string>();
 				}
-				else return make_pair("void *", false);
-			}
-			case DW_TAG_array_type: {
-				// we only understand C arrays, for now
-				int language = p_d.enclosing_cu()->get_language();
-				assert(language == DW_LANG_C89 
-					|| language == DW_LANG_C 
-					|| language == DW_LANG_C99);
-				iterator_df<array_type_die> arr
-				 = p_d.as_a<array_type_die>();
-				// calculate array size, if we have a subrange type
-				auto array_size = arr->element_count();
-				ostringstream arrsize; 
-				if (array_size) arrsize << *array_size;
-				return make_pair(cxx_decl_from_type_die(arr->get_type(), 
-							optional<string>(), 
-							use_friendly_base_type_names, extra_prefix, 
-							use_struct_and_union_prefixes).first
-					+ " " + (!!infix_typedef_name ? *infix_typedef_name : "") + "[" 
-					// add size, if we have a subrange type
-					+ arrsize.str()
-					+ "]", !!infix_typedef_name ? true : false);
-			}
-			case DW_TAG_subroutine_type:
-			case DW_TAG_subprogram: {
-				ostringstream s;
-				iterator_df<type_describing_subprogram_die> subroutine_type 
-				 = p_d.as_a<type_describing_subprogram_die>();
-				s << (subroutine_type->get_type() 
-					? cxx_decl_from_type_die(subroutine_type->get_type(),
-					optional<string>(), 
-							use_friendly_base_type_names, extra_prefix, 
-							use_struct_and_union_prefixes
-					).first 
-					: string("void "));
-				s << "(" << (!!infix_typedef_name ? *infix_typedef_name : "")
-					<< ")(";
-				
-				auto children = p_d.children();
-				for (auto i_child = children.first; i_child != children.second; ++i_child)
-				{
-					if (i_child != children.first) s << ", ";
-					switch (i_child.tag_here())
-					{
-						case DW_TAG_formal_parameter:
-							s << cxx_decl_from_type_die( 
-									i_child.as_a<formal_parameter_die>()->get_type(),
-										optional<string>(), 
-										use_friendly_base_type_names, extra_prefix, 
-										use_struct_and_union_prefixes
-									).first;
-							break;
-						case DW_TAG_unspecified_parameters:
-							s << "...";
-							break;
-						default: continue;
-					}
-				}
-				s << ")"; 
-				return make_pair(s.str(), true);
-			}
-			case DW_TAG_const_type:
-				qualifier_suffix = " const";
-				goto handle_qualified_type;
-			case DW_TAG_volatile_type:
-				qualifier_suffix = " volatile";
-				goto handle_qualified_type;
-			case DW_TAG_structure_type:
-				if (use_struct_and_union_prefixes) name_prefix = "struct ";
-				goto handle_named_type;
-			case DW_TAG_union_type:
-				if (use_struct_and_union_prefixes) name_prefix = "union ";
-				goto handle_named_type;
-			case DW_TAG_class_type:
-				if (use_struct_and_union_prefixes) name_prefix = "class ";
-				goto handle_named_type;
-			handle_named_type:
-			default:
-				return make_pair(
-					(!!extra_prefix ? *extra_prefix : "") + name_prefix + cxx_name_from_die(p_d),
-					false);
-			handle_qualified_type: {
-				/* This is complicated by the fact that array types in C/C++ can't be qualified directly,
-				 * but such qualified types can be defined using typedefs. (FIXME: I think this is correct
-				 * but don't quote me -- there might just be some syntax I'm missing.) */
-				iterator_df<type_die> chained_type =  p_d.as_a<type_chain_die>()->get_type();
-				/* Note that many DWARF emitters record C/C++ "const void" (as in "const void *")
-				 * as a const type with no "type" attribute. So handle this case. */
-				if (!chained_type) return make_pair("void" + qualifier_suffix, false);
-				else if (cxx_type_can_be_qualified(chained_type))
-				{
-					auto decl = cxx_decl_from_type_die(
-						chained_type, 
-						infix_typedef_name,
-						use_friendly_base_type_names, extra_prefix, 
-						use_struct_and_union_prefixes
-						);
-					return make_pair(decl.first + qualifier_suffix, decl.second);
-				}
-				else 
-				{
-					// fallback: assume that the more primitive (unqualified) type
-					// already has a typedef. So we just qualify that typedef and return.
-					return make_pair(create_ident_for_anonymous_die(chained_type)
-						+ " " + qualifier_suffix, false);
-
-					//throw Not_supported(string("C++ qualifiers for types of tag ")
-					//	 + p_d.spec_here().tag_lookup(chained_type.tag_here()));
-				}
-			}
-		}
+			}), extra_prefix(extra_prefix),
+			use_friendly_base_type_names(use_friendly_base_type_names),
+			use_struct_and_union_prefixes(use_struct_and_union_prefixes) {}
+		};
+		default_namer namer(*this,
+			use_friendly_base_type_names,
+			extra_prefix,
+			use_struct_and_union_prefixes);
+		ostringstream name_out; name_out << (maybe_name ? *maybe_name : "");
+		ostringstream out;
+		out << make_declaration_of_type(p_d, name_out, namer).str();
+		return make_pair(out.str(), false);
 	}
 	
 	bool 
@@ -504,9 +396,9 @@ namespace tool {
 // 		try
 // 		{
 			return cxx_decl_from_type_die(p_d, 
-				infix_typedef_name,
+				infix_typedef_name ? *infix_typedef_name : opt<string>(),
 				use_friendly_base_type_names,
-				extra_prefix,
+				extra_prefix ? *extra_prefix : opt<string>(),
 				use_struct_and_union_prefixes);
 // 		} 
 // 		catch (dwarf::expr::Not_supported)
@@ -592,9 +484,9 @@ namespace tool {
 		// name_for_type just calls cxx_decl_from_type_die,
 		// which seems fishy, especially as we passed it 'name_to_use' as the name
 		auto decl = cxx_decl_from_type_die(p_target,
-				optional<string>(), // <-- this said 'name_to_use' but that seems wrong. We're proposing the typedef name as the name to use
+				opt<string>(), // <-- this said 'name_to_use' but that seems wrong. We're proposing the typedef name as the name to use
 				/* use_friendly_base_type_names */ true, // FIXME: get this from caller
-				/* extra_prefix */ optional<string>(),
+				/* extra_prefix */ opt<string>(),
 				/* use_struct_and_union_prefixes */ true); // FIXME: get this from caller
 		
 		//name_for_type(p_target, name_to_use);
@@ -705,10 +597,9 @@ namespace tool {
 				/* use_struct_and_union_prefixes */ true);
 			out << decl.first;
 		}
-		if (write_semicolon) out << ";";
 #endif
-		out << make_declaration_of_type(p_d, name);
-
+		out << cxx_decl_from_type_die(p_d).first;
+		if (write_semicolon) out << ";";
 		out << endl;
 		if (write_semicolon && wrap_with_extern_lang) 
 		{
@@ -724,11 +615,12 @@ namespace tool {
 	 * This is supposed to be a helper, but actually it can declare pretty much
 	 * anything we want. Do we ever want to do more than declare? In noopgen,
 	 * yes, but that is a client that supplies its own logic.
-	 * */
-	string
+	 */
+	ostringstream
 	cxx_generator_from_dwarf::make_declaration_of_type(
 		iterator_df<type_die> t,
-		const string& name
+		const ostringstream& name_in,
+		std::function< opt<string>(iterator_base) > const& namer
 	)
 	{
 	/*
@@ -754,7 +646,26 @@ namespace tool {
             ) ^ ")" ))
 
 	 */
-		if (t.is_a<address_holding_type_die>())
+#define RETURN_STREAM(toks...) do { ostringstream ret; ret toks; return ret; } while (0)
+#define STREAM(toks...) ({ ostringstream ret; ret toks; std::move(ret); })
+	 	if (namer(t)) RETURN_STREAM( << *namer(t) << " " << name_in.str());
+		assert(!!t); // namer has handled void
+		assert(!t.is_a<base_type_die>()); // ... and base types (must have name)
+		assert(!t.is_a<typedef_die>()); // and typedefs (ditto)
+		if (t.is_a<with_data_members_die>()
+			|| t.is_a<enumeration_type_die>())
+		{	/* unnamed; caller may want us to emit an "inline
+			 * definition" or to use a generated name */
+			assert(!t.name_here());
+			abort();
+		}
+		else if (t.is_a<subrange_type_die>())
+		{
+			RETURN_STREAM( << name_for_type(t.as_a<subrange_type_die>()->get_type(),
+				optional<string>(), true).first
+				<< " " << name_in.str());
+		}
+		else if (t.is_a<address_holding_type_die>())
 		{
 			auto pointeeT = t.as_a<address_holding_type_die>()->find_type();
 			ostringstream o;
@@ -763,31 +674,26 @@ namespace tool {
 			string op = (t.is_a<pointer_type_die>() ? "*" :
 				         t.is_a<reference_type_die>() ? "&" :
 				         t.is_a<rvalue_reference_type_die>() ? "&&" :
-				         "UNKNOWN ADDRHOLDER FIXME"
+				         (string("/* really ") +
+				             t.spec_here().tag_lookup(t.tag_here())
+				             +  "*/ *")
 			);
 			if (do_paren) o << "(";
-			o << op << name;
+			o << op << name_in.str();
 			if (do_paren) o << ")";
 			string starred_name = o.str();
-			return make_declaration_of_type(pointeeT, starred_name);
-		}
-		else if (!t) /* void */
-		{
-			return "void " + name;
-		}
-		else if (t.is_a<base_type_die>()
-			|| t.is_a<with_data_members_die>()
-			|| t.is_a<enumeration_type_die>()
-			|| t.is_a<typedef_die>())
-		{
-			return name_for_type(t, optional<string>(), true,
-				optional<string>(), true).first + " " + name;
+			return make_declaration_of_type(pointeeT, /*starred_name*/o, namer);
 		}
 		else if (t.is_a<array_type_die>())
 		{
+			// we only understand C arrays, for now
+			int language = t.enclosing_cu()->get_language();
+			assert(language == DW_LANG_C89 
+				|| language == DW_LANG_C 
+				|| language == DW_LANG_C99);
 			auto elT = t.as_a<array_type_die>()->find_type();
 			ostringstream o;
-			o << make_declaration_of_type(elT, name);
+			o << make_declaration_of_type(elT, name_in, namer).str();
 			vector<opt<Dwarf_Unsigned> > elCounts
 			 = t.as_a<array_type_die>()->dimension_element_counts();
 			for (auto maybe_count : elCounts)
@@ -796,42 +702,44 @@ namespace tool {
 				if (maybe_count) o << *maybe_count;
 				o << "]";
 			}
-			return o.str();
+			return o/*.str()*/;
 		}
 		else if (t.is_a<qualified_type_die>())
 		{
 			string qual = (t.is_a<const_type_die>() ? "const" :
 				 t.is_a<volatile_type_die>() ? "volatile" :
 				 t.is_a<restrict_type_die>() ? "restrict" :
-				 "UNKNOWN QUAL FIXME"
+				 std::regex_replace( /* best guess! */
+				 	t.spec_here().tag_lookup(t.tag_here()),
+				 	std::regex("DW_TAG_(.*)_type", std::regex_constants::extended),
+					"$&")
 				);
 			auto innerT = t.as_a<qualified_type_die>()->find_type();
 			return make_declaration_of_type(innerT,
-				qual + " " + name);
+				STREAM( << qual << " " << name_in.str()), namer);
+			/* NOTE: there were some quirks in the original cxx_decl_from_type_die
+			 * implementation, splitting on cxx_type_can_be_qualified(chained_type)),
+			 * but I'm not sure what case that hit (qualified-type DIE wrapped around
+			 * a cxx type that can't be qualified? sounds like fishy DWARF) */
 		}
 		else if (t.is_a<type_describing_subprogram_die>())
 		{
 			auto rett = t.as_a<type_describing_subprogram_die>()->find_type();
 			ostringstream o;
-			o << name << "(";
+			o << name_in.str() << "(";
 			auto fp_children = t->children().subseq_of<formal_parameter_die>();
 			for (auto i_arg = fp_children.first; i_arg != fp_children.second; ++i_arg)
 			{
 				if (i_arg != fp_children.first) o << ", ";
 				o << make_declaration_of_type(
-						i_arg->find_type(), "");
+						i_arg->find_type(), ostringstream(), namer).str();
 			}
 			o << ")";
 			return make_declaration_of_type(
 				rett,
-				o.str()
+				o/*.str()*/,
+				namer
 			);
-		}
-		else if (t.is_a<subrange_type_die>())
-		{
-			return name_for_type(t.as_a<subrange_type_die>()->get_type(),
-				optional<string>(), true).first
-				+ " " + name;
 		}
 		else /*including if (t.is_a<string_type_die>()) */
 		{
@@ -894,7 +802,7 @@ namespace tool {
 		assert(!our_name_for_this_type.second);
 
 		if (our_name_for_this_type.first != *type_name_in_compiler)
-		{
+		{ /* This is what generates 'long_unsigned_int' etc. */
 			out << "typedef " << *type_name_in_compiler
 				<< ' ' << protect_ident(our_name_for_this_type.first)
 				<< ';' << endl;

@@ -46,7 +46,7 @@ public:
 
 	void emit_all_decls(root_die& r);
 
-	void emit_decls(const set<iterator_base>& dies);
+	void emit_decls(set<iterator_base>& dies); // destructive of 'dies'!
 	
 	void emit_forward_decls(const set<iterator_base>& fds);
 };

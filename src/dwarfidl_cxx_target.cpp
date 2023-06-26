@@ -32,6 +32,9 @@ using boost::optional;
 using dwarf::core::root_die;
 using dwarf::core::compile_unit_die;
 using dwarf::core::with_data_members_die;
+using dwarf::core::type_chain_die;
+using dwarf::core::variable_die;
+using dwarf::core::member_die;
 using dwarf::core::program_element_die;
 using dwarf::spec::opt;
 
@@ -103,13 +106,13 @@ void dwarfidl_cxx_target::emit_all_decls(root_die& r)
 	emit_decls(dies);
 }
 
-void dwarfidl_cxx_target::emit_decls(const set<iterator_base>& dies)
+void dwarfidl_cxx_target::emit_decls(set<iterator_base>& dies)
 {
 	/* We now don't bother doing the topological sort, so we just
 	 * forward-declare everything that we can.
 	 * PROBLEM: anything can depend on a typedef, and
 	 * typedefs can depend on typedefs.
-	 * Instead of a topsort we can probably just do a fixed-point
+	 * Instead of an up-front topsort we can probably just do a fixed-point
 	 * iteration: emit anything whose dependencies have been emitted,
 	 * and keep doing that until nothing is left.
 	 */
@@ -137,52 +140,130 @@ void dwarfidl_cxx_target::emit_decls(const set<iterator_base>& dies)
 	// - nameless function typedefs after big_allocation (3805..31e6)
 	
 	set<iterator_base> emitted;
-	auto can_emit_now = [](iterator_base i) -> bool {
-		set< iterator_df<type_die> > dependencies;
-		auto collect_named_dependencies = [&dependencies, collect_named_dependencies](iterator_base i) {
-			// if it's forward-declared, we don't bother counting it as a dependency
-			if (i.is_a<with_data_members_die>() && i.name_here()) return;
-			if (i.is_a<base_type_die>()) return; // base types are always available
-			if (i.is_a<type_chain_die>())
-			{ collect_named_dependencies(i.as_a<type_chain_die>()->find_type()); }
-			else if (i.is_a<variable_die>())
-			{ collect_named_dependencies((i.as_a<variable_die>()->find_type()); }
-			else if (i.is_a<with_data_members_die>()) // anonymous case
-			{
-				// what about the with-data-members itself? no, it's not named
-				// (In practice, we may give it a name. And if we do, anything
-				// depending on it 
-				auto children = i.children().subseq_of<member_die>()
-				for (auto i_child = children.first; i_child != children.second; ++i_child)
-				{
-					add_dependency(i_child->find_type());
-				}
-			}
-			else if (i.is_a<type_describing_subprogram_die>())
-			{
-				if (i.as_a<type_describing_subprogram_die>()->get_type())
-				{
-					collect_named_dependencies(i.as_a<type_describing_subprogram_die>()->find_type());
-				}
-				auto children = i.children().subseq_of<member_die>()
-				for (auto i_child = children.first; i_child != children.second; ++i_child)
-				{
-					collect_named_dependencies(i_child->find_type());
-				}
-			}
-			else { /* what goes here? */ }
-		};
 
-			if (i.is_a<type_chain_die>()) add_dependency(
-			// array types etc: 
-			dependencies.insert(i);
+	/* I started writing a bunch of things like this... */
+#if 0
+	enum anonymous_emit_method {
+		EMIT_INLINE,
+		EMIT_WITH_GENERATED_NAME
+	};
+	enum base_type_reference_method {
+		EMIT_USING_COMPILER_INFO,
+		EMIT_AS_IF_TYPEDEF
+	};
+	enum typedef_emit_method {
+		NO_EMIT_TYPEDEF,
+		EMIT_TYPEDEF
+	};
+#endif
+	/* ... but these seem more like roughly per-method overrides.
+	 * So instead let's use "static polymorphism" here. */
+	enum dep_kind {
+		DEP_DECL,
+		DEP_DEF
+	};
+	multimap< iterator_base, pair<dep_kind, iterator_base> > dependencies;
+
+	/* Just what does "dependency" mean here?
+	 * It means another thing that must be emitted before we can emit the first thing.
+	 * Whether that is true depends on
+	 * (1) how we are doing naming ("OK to inline anonymouses"? 
+	 *        "see through typedefs"? if yes then no dependency on the typedef?
+	 *        + what we have forward-decl'd <-- NO, this just affects emit algo/strategy
+	 *        + should base types be explicitly named/declared as if a typedef
+	 *        + should struct/union/class be tagged
+	 *        
+	 * (2) how we are using the thing (pointer-to-struct? forward-decl is enough;
+	 *        instantiate struct? forward-decl is not enough)
+	 */
+#if 0
+	struct name_emitter
+	{
+
+		opt<string> name_referring_to_anonymous(iterator_df<basic_die> i)
+		{ return opt<string>(); /* forces inline treatment of anonymouses */ }
+		opt<string> name_referring_to(iterator_df<basic_die> i)
+		{ return i.name_here() ?: name_referring_to_anonymous(i); }
+		/* Now if I supply overrides like... */
+		opt<string> name_referring_to(iterator_df<base_type_die> i)
+		{  }
+		/* ... how do I ensure they get dispatched to? Or even
+		 * using template <Dwarf_Half tag> ... ? */
+
+		set<pair<dep_kind, iterator_base> > get_dependencies(iterator_base i)
+		{
+			/* Enumerate what any given DIE depends on. Whenever we get
+			 * a DIE that we depend on, use name_referring_to and see what
+			 * it says. If it comes back with a name, we depend on that
+			 * named thing. If it comes back with no name, we don't depend
+			 * on that named thing but we will have to inline that definition
+			 * e.g. of an anonymous struct.
+			 *
+			 * So really we are doing the emission, just in a no-op mode
+			 * where we don't actually emit anything, just record dependencies.
+			 * So this should really be implemented as a parameterisation of
+			 * our .
+			 *
+			 * "Can we refer to it by name [in this context]?"
+			 * If we can, get the name. Emit: use it.
+			 *                          DepRecord: depend on a decl/def of it.
+			 * If we can't, decompose.  Emit: use the parts to accumulate the name.
+			 *                          DepRecord: depend on a decl/def of each part.
+			 *
+			 * /*namer << t << "name" ;*/
+			 * What about the very top level?
+			 */
+		
+		}
+	};
+
+	std::function<void(iterator_base)> collect_named_dependencies
+	 = [&dependencies, collect_named_dependencies](iterator_base i) {
+		auto add_dependency = [&dependencies, &i](iterator_base j) {
+			dependencies.insert(make_pair(i, j));
 		};
+		// if it's forward-declared, we don't bother counting it as a dependency
+		if (i.is_a<with_data_members_die>() && i.name_here()) return;
+		if (i.is_a<base_type_die>()) return; // base types are always available
+		if (i.is_a<type_chain_die>())
+		{ collect_named_dependencies(i.as_a<type_chain_die>()->find_type()); }
+		else if (i.is_a<variable_die>())
+		{ collect_named_dependencies(i.as_a<variable_die>()->find_type()); }
+		else if (i.is_a<with_data_members_die>()) // anonymous case
+		{
+			// what about the with-data-members itself? no, it's not named
+			// (In practice, we may give it a name. And if we do, anything
+			// depending on it 
+			auto children = i.children().subseq_of<member_die>();
+			for (auto i_child = children.first; i_child != children.second; ++i_child)
+			{
+				add_dependency(i_child->find_type());
+			}
+		}
+		else if (i.is_a<type_describing_subprogram_die>())
+		{
+			if (i.as_a<type_describing_subprogram_die>()->get_type())
+			{
+				collect_named_dependencies(i.as_a<type_describing_subprogram_die>()->find_type());
+			}
+			auto children = i.children().subseq_of<member_die>()
+			for (auto i_child = children.first; i_child != children.second; ++i_child)
+			{
+				collect_named_dependencies(i_child->find_type());
+			}
+		}
+		else { /* what goes here? */ }
+	};
+#endif
+	auto can_emit_now = [dependencies](iterator_base i) -> bool {
 		// gather dependencies
 		/* Now test whether all dependencies are emitted. */
+#if 0
 		for (auto i_dep = dependencies.begin(); i_dep != dependencies.end(); ++i_dep)
 		{
 			if (emitted.find(i_dep) == emitted.end()) return false;
 		}
+#endif
 		return true;
 	};
 	multimap< vector<opt<string > >, iterator_base > emitted_by_path;
