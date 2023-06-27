@@ -267,7 +267,7 @@ void dwarfidl_cxx_target::emit_decls(set<iterator_base>& dies)
 		return true;
 	};
 	multimap< vector<opt<string > >, iterator_base > emitted_by_path;
-	auto pred = [&emitted_by_path, &emitted, this](iterator_base i) -> bool {
+	auto need_to_emit = [&emitted_by_path, &emitted, this](iterator_base i) -> bool {
 		/* We check whether exactly we have been declared already */
 		if (emitted.find(i) != emitted.end()) return false;
 		/* Also check whether something of this name has been declared already. */
@@ -338,10 +338,9 @@ void dwarfidl_cxx_target::emit_decls(set<iterator_base>& dies)
 			// We won't use the name on the const type, so we use the
 			// cxx_type_can_have_name helper to rule those cases out.
 			auto is_type = i.as_a<type_die>();
-			if (
-				(!is_type || (is_type && this->cxx_type_can_have_name(is_type)))
-			&&  !is_harmless_fwddecl
-			)
+			if ( (!is_type || (is_type && this->cxx_type_can_have_name(is_type)))
+			&&   !is_harmless_fwddecl
+			   )
 			{
 				// toplevel_decls_emitted.insert(make_pair(*opt_ident_path, i));
 			}
@@ -351,6 +350,9 @@ void dwarfidl_cxx_target::emit_decls(set<iterator_base>& dies)
 		emitted_by_path.insert(make_pair(ident_path, i));
 		return true;
 	};
+	bool use_friendly_base_type_names = true;
+	referencing_ostream namer(*this, use_friendly_base_type_names,
+		spec::opt<string>(), /* use_struct_and_union_prefixes */ true);
 	auto i_i_d = dies.begin();
 	while (!dies.empty())
 	{
@@ -363,15 +365,147 @@ void dwarfidl_cxx_target::emit_decls(set<iterator_base>& dies)
 			if (can_emit_now(i_d))
 			{
 				cerr << "Now dispatching " << i_d.summary() << endl;
-				// o = (*i)->get_offset();
-				//if (!spec::file_toplevel_die::is_visible()(p_d)) continue; 
-				dispatch_to_model_emitter(
-					out,
-					i_d,
-					// this is our predicate
-					pred
-					);
+				if (need_to_emit(i_d))
+				{
+					iterator_df<type_die> t = iterator_base::END;
+					opt<string> maybe_n = namer.can_refer_to(i_d);
+					string n;
+					bool emit_semicolon = true;
+					if (i_d.is_a<core::with_type_describing_layout_die>())
+					{
+						// this includes variables but also members
+						t = i_d.as_a<core::with_type_describing_layout_die>()->find_type();
+						n = *maybe_n;
+					}
+					else if (i_d.is_a<subprogram_die>())
+					{
+						t = i_d.as_a<type_die>();
+						n = *maybe_n;
+					}
+					else if (i_d.is_a<core::typedef_die>())
+					{
+						t = i_d.as_a<core::typedef_die>()->find_type();
+						n = *maybe_n;
+						out << "typedef ";
+					}
+					else if (i_d.is_a<core::base_type_die>() &&
+						!use_friendly_base_type_names)
+					{
+						// this case is like a typedef...
+						// where the named type is the real base type name
+						auto i_b = i_d.as_a<core::base_type_die>();
+						optional<string> real_n = name_for_base_type(i_b);
+						// and the typedef name is something we invent
+						// typedef the friendly name as the 
+						string invented_name = cxx_name_from_string(*i_b.name_here(), "");
+						out << "typedef " << *real_n << invented_name;
+						// FIXME: conflicts of invented name with something else?
+						// we really want our namer to handle this.
+						// Where does this fit in what the namer can do?
+						// Really it should be able to handle all of this for us.
+						// We should be able to ask it whether it can name
+						// the base type under its current behaviour, and
+						// only emit the typedef (meaning a dependency)
+						// if it says this is necessary. And it should emit it!
+					}
+					else if (i_d.is_a<core::base_type_die>())
+					{
+						// no need to emit anything
+						goto next;
+					}
+					else if (i_d.is_a<type_die>())
+					{
+						// We have a type that our namer can name,
+						// but we need to ensure it is actually defined by that name.
+						/*
+						 HMM! This is a dependency issue!
+n						 But wait.
+						 Our slice was also collected by following dependencies.
+						 We generate a slice by following "dependencies" backwards
+						 from DIEs in our slicing criterion, where "A depends on B"
+						 if A occurring as part of an interface definition
+						 (function signatures, variable declarations)
+						 requires B to be available in that same definition.
+						 This is invariably because B is [part of] a type involved in A somehow
+						 (A may or may not be a type or part of one; it may be
+						 a variable or subprogram).
+						 These dependencies may be circular.
+						 
+						 We have a different notion of dependency here.
+						 In fact we have three!
+						 "Must be declared before declaring",
+						 "must be declared before defining",
+						 "must be defined before defining"
+						 (defined-before-declaring? I think this doesn't
+						  exist at least in C, e.g. compiler happily lets you
+						  can create a function pointer whose return type
+						  is opaque, just not call it)
+						
+						 'emitted' is not enough; need
+						 emitted decl, emitted def, can emit decl, can emit def.
+						 some things we only decl, not def  (vars, subprograms)
+						 some things we both decl and def   (struct types)
+						 for some things decl and def are the same (typedef)
+						 decl'd always implies def'd, i.e. a preceding def is enough.
+						 
+						 How do we gather these emit-before dependencies?
+						 Our 'namer' can help, but to what extent?
+						 When a name it used, it implies that at least a decl must exist.
+						 *In some contexts* a def must also exist, e.g. instantiating
+						  a struct type.
+						 How can we elicit this distinction?
+						 We could use an 'endl'-like thing in the stream output.
+						 Perhaps the thing to do is write the dependency-gathering
+						 
+						 Typedefs confuse "defined": a typedef of an incomplete
+						 struct def is itself 'defined', but the struct remains not so.
+						 Do we need to define "fully defined"?
+						 Do we ever depend on being defined but not depend on fully-defined?
+						 
+						 Maybe we need "fulldecl" versus "fwddecl" (two ways we can emit)
+						           and "ref" and "fullref".
+						 Emitting a "fullref" requires its referent to be transitively fully declared.
+						 But hmm, this is not quite right. If I have a function
+						 g(struct foo x, struct bar *y)
+						 it makes a fullref to x and y, but
+						 y doesn't transitively require struct bar to be fully defined.
+						 We need something short of "transitive"
+						 that sees through typedef_die but does not see through pointer_type_die.
+						 Can think of typedef as porous to fullref: "a fullref to a typedef
+						    implies a fullref
+						 
+						 We have another example of slicing though:
+						 noopgen is generating 
+						 
+						 We could imagine other applications, e.g. pasting the
+						 (post-preprocessing) body of a function
+						 into a context where it can be recompiled individually.
+						 But again that really only requires the interface as context.
+						 It seems hard to think of an example where the internals
+						 of a function are actually an important part of the slice.
+						 
+						 
+						 
+						 
+						 * */
+						// HMM. This is probably wrong
+						cerr << "Next decl is probably wrong!" << endl;
+						t = i_d.as_a<type_die>();
+						n = "";
+					}
+					else
+					{
+						abort();
+					}
+					string decl = make_declaration_having_type(t, n, namer,
+						/* emit_fp_names */ true);
+					cerr << "Made decl: " << decl << endl;
+					out << decl;
+					if (emit_semicolon) out << ";";
+					out << std::endl;
+				}
 				// remove what we emit
+			next:
 				i_i_d = dies.erase(i_i_d);
 				removed_one = true;
 			}

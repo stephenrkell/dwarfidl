@@ -38,7 +38,6 @@ using dwarf::spec::opt;
 
 using dwarf::lib::Dwarf_Off;
 
-// regex usings
 using boost::regex;
 using boost::regex_match;
 using boost::smatch;
@@ -48,18 +47,15 @@ using boost::format_all;
 
 using std::function;
 
-
 namespace dwarf { namespace tool {
 
 void my_walk_type(iterator_df<type_die> t, iterator_df<program_element_die> reason, 
-					const std::function<bool(iterator_df<type_die>, iterator_df<program_element_die>)>& pre_f, 
-					const std::function<void(iterator_df<type_die>, iterator_df<program_element_die>)>& post_f
-					= std::function<void(core::iterator_df<core::type_die>, core::iterator_df<core::program_element_die>)>(),
-					const type_set& currently_walking = type_set()
-					// const mru_list<type_die> &cache = mru_list<type_die>()
-	   )
+	const function<bool(iterator_df<type_die>, iterator_df<program_element_die>)>& pre_f, 
+	const function<void(iterator_df<type_die>, iterator_df<program_element_die>)>& post_f
+	= std::function<void(iterator_df<type_die>, iterator_df<program_element_die>)>(),
+	const type_set& currently_walking = type_set()
+)
 {
-//			   if (cache.find(t) != cache.end()) return;
 	if (currently_walking.find(t) != currently_walking.end()) return; // "grey node"
 
 	bool continue_recursing;
@@ -71,7 +67,6 @@ void my_walk_type(iterator_df<type_die> t, iterator_df<program_element_die> reas
 
 	if (continue_recursing)
 	{
-
 		if (!t) { /* void case; just post-visit */ }
 		else if (t.is_a<type_chain_die>()) // unary case -- includes typedefs, arrays, pointer/reference, ...
 		{
@@ -127,13 +122,11 @@ void my_walk_type(iterator_df<type_die> t, iterator_df<program_element_die> reas
 			{
 				my_walk_type(i_fp->find_type(), i_fp, pre_f, post_f, next_currently_walking);
 				}*/
-
 		}
 		else
 		{
 			// what are our nullary cases?
 			assert(t.is_a<base_type_die>() || t.is_a<unspecified_type_die>());
-
 		}
 	} // end if continue_recursing
 
@@ -164,15 +157,9 @@ gather_interface_dies(root_die& root,
 			
 			/* utility that will come in handy */
 			auto add_all_types = [&types, &root](iterator_df<type_die> outer_t) {
-				 if (outer_t && outer_t.offset_here() == 0x5ae511d) {
-					  cerr << "found the thing." << endl;
-				 }
-
-				 if (outer_t) {
-					  cerr << "add_all_types processing offset 0x" << std::hex <<  outer_t.offset_here() << std::dec << ": " << outer_t.summary() << endl;
-					  
-				 }
-				 
+				if (outer_t) {
+					cerr << "add_all_types processing offset 0x" << std::hex <<  outer_t.offset_here() << std::dec << ": " << outer_t.summary() << endl;
+				}
 				my_walk_type(outer_t, iterator_base::END, 
 					[&types, &root](iterator_df<type_die> t, iterator_df<program_element_die> reason) -> bool {
 						if (!t) return false; // void case

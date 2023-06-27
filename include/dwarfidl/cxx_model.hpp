@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <sstream>
 #include <regex>
+#include <type_traits>
 #include <srk31/algorithm.hpp>
 #include <srk31/indenting_ostream.hpp>
 
@@ -78,40 +79,16 @@ public:
 	cxx_generator_from_dwarf(const spec::abstract_def& s) : p_spec(&s) {}
 
 	bool is_builtin(iterator_df<> p_d); // FIXME: belongs with compiler? no because DWARFy
-
-	string 
-	name_for(iterator_df<type_die> t) 
-	{ return local_name_for(t); }
 	
 	virtual 
 	optional<string>
 	name_for_base_type(iterator_df<base_type_die>) = 0;
-	
-	vector<string> 
-	name_parts_for(iterator_df<type_die> t) 
-	{ return local_name_parts_for(t); }
 
 	bool 
 	type_infixes_name(iterator_df<basic_die> p_d);
 
-	string 
-	local_name_for(iterator_df<basic_die> p_d,
-		bool use_friendly_names = true) 
-	{ return name_from_name_parts(local_name_parts_for(p_d, use_friendly_names)); }
-
-	vector<string> 
-	local_name_parts_for(iterator_df<basic_die> p_d,
-		bool use_friendly_names = true);
-		
-	string 
-	fq_name_for(iterator_df<basic_die> p_d)
-	{ return name_from_name_parts(fq_name_parts_for(p_d)); }
-	
 	vector<string> 
 	fq_name_parts_for(iterator_df<basic_die> p_d);
-	
-	string 
-	cxx_name_from_die(iterator_df<basic_die> p_d);
 
 	bool 
 	cxx_type_can_be_qualified(iterator_df<type_die> p_d) const;
@@ -165,11 +142,64 @@ public:
 		bool wrap_with_extern_lang = true
 	);
 
-	std::ostringstream
-	make_declaration_of_type(
+	struct referencing_ostream
+	{
+	private:
+		std::ostringstream super;
+	public:
+		cxx_generator_from_dwarf &gen;
+		bool use_friendly_base_type_names;
+		opt<string> extra_prefix;
+		bool use_struct_and_union_prefixes;
+
+		referencing_ostream(cxx_generator_from_dwarf &gen,
+			bool use_friendly_base_type_names,
+			opt<string> extra_prefix,
+			bool use_struct_and_union_prefixes
+		) : gen(gen), use_friendly_base_type_names(use_friendly_base_type_names),
+		    extra_prefix(extra_prefix),
+			use_struct_and_union_prefixes(use_struct_and_union_prefixes)
+		{}
+		
+		string str() const { return this->super.str(); }
+		/* Can't do this because we can't */
+		referencing_ostream fresh_context() const
+		{ return std::move(referencing_ostream(this->gen,
+			this->use_friendly_base_type_names,
+			this->extra_prefix, this->use_struct_and_union_prefixes)); }
+
+		opt<string> can_refer_to(iterator_base i);
+
+		// any string we receive should be a C++ token
+		referencing_ostream& operator<<(const string& s)
+		{ this->super << s; return *this; }
+		referencing_ostream& operator<<(const char *s)
+		{ this->super << s; return *this; }
+		/* PROBLEM: we want this operator<< to override any
+		 * operator<< that is defined on iterator_base and its subclasses.
+		 * Since only we know that we are an ostream, that seems simple,
+		 * yet I am seeing the wrong kind of printout emerging.  */
+		referencing_ostream& operator<<(iterator_base i)
+		{ this->super << *can_refer_to(i); return *this; }
+		/* generic but for 'any scalar type' only, to avoid overlap
+		 * with our iterator_base case. */
+		template <typename Any, typename dummy = typename std::enable_if< std::is_scalar<Any>::value >::type >
+		referencing_ostream& operator<<(Any s)
+		{ this->super << s; return *this; }
+	};
+	
+	string
+	make_declaration_having_type(
 		iterator_df<type_die> p_d,
-		const std::ostringstream& name_in,
-		std::function< opt<string>(iterator_base) > const& namer
+		const std::string& name_in,
+		referencing_ostream& namer,
+		bool emit_fp_names = true
+	);
+
+	srk31::indenting_ostream&
+	emit_definition(iterator_base i_d,
+		srk31::indenting_ostream& out,
+		referencing_ostream& namer
 	);
 
 	string 
@@ -179,21 +209,6 @@ public:
 
 	string 
 	protect_ident(const string& ident);
-	
-	template <Dwarf_Half Tag>
-	void 
-	emit_model(
-		indenting_ostream& out,
-		const iterator_base& i_d
-	);
-	
-	template<typename Pred = srk31::True<iterator_df<basic_die> > > 
-	void 
-	dispatch_to_model_emitter(
-		indenting_ostream& out, 
-		const iterator_base& i_d, 
-		const Pred& pred = Pred()
-	);
 
 protected:
 	virtual 
@@ -206,93 +221,7 @@ protected:
 		return t;
 	}
 
-	template <typename Pred = srk31::True< iterator_df<basic_die> > >
-	void 
-	recursively_emit_children(
-		indenting_ostream& out,
-		const iterator_base& i_d,
-		const Pred& pred = Pred(),
-		bool add_line_breaks = true
-	);
 };
-
-/* specializations of the above */
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_base_type>             (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subprogram>            (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_formal_parameter>      (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_unspecified_parameters>(indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_array_type>            (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_enumeration_type>      (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_member>                (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_pointer_type>          (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_reference_type>        (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_structure_type>        (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subroutine_type>       (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_typedef>               (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_union_type>            (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_const_type>            (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_constant>              (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_enumerator>            (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_variable>              (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_volatile_type>         (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_restrict_type>         (indenting_ostream& out, const iterator_base& i_d);
-template<> void cxx_generator_from_dwarf::emit_model<DW_TAG_subrange_type>         (indenting_ostream& out, const iterator_base& i_d);
-
-	/* The dispatch function (template) defined. */
-	template <typename Pred /* = srk31::True<iterator_df<basic_die> > */ > 
-	void cxx_generator_from_dwarf::dispatch_to_model_emitter(
-		indenting_ostream& out,
-		const iterator_base& i_d,
-		const Pred& pred /* = Pred() */)
-	{
-		// if it's a compiler builtin, skip it
-		if (is_builtin(i_d)) return;
-		// if it's not visible, skip it
-		// if (!is_visible(p_d->get_this())) return;
-		// if our predicate says no, skip it
-		if (!pred(i_d)) return;
-	
-		// otherwise dispatch
-		switch(i_d.tag_here())
-		{
-			case 0:
-				assert(false);
-			case DW_TAG_compile_unit: // we use all_compile_units so this shouldn't happen
-				assert(false);
-		#define CASE(fragment) case DW_TAG_ ## fragment:	\
-			emit_model<DW_TAG_ ## fragment>(out, i_d); break; 
-			CASE(subprogram)
-			CASE(base_type)
-			CASE(typedef)
-			CASE(structure_type)
-			CASE(pointer_type)
-			CASE(volatile_type)
-			CASE(formal_parameter)
-			CASE(array_type)
-			CASE(enumeration_type)
-			CASE(member)
-			CASE(subroutine_type)
-			CASE(union_type)
-			CASE(const_type)
-			CASE(constant)
-			CASE(enumerator)
-			CASE(variable)
-			CASE(restrict_type)
-			CASE(subrange_type)   
-			CASE(unspecified_parameters)
-		#undef CASE
-			// The following tags we silently pass over without warning
-			case DW_TAG_condition:
-			case DW_TAG_lexical_block:
-			case DW_TAG_label:
-				break;
-			default:
-				cerr 	<< "Warning: ignoring tag " 
-							<< i_d.spec_here().tag_lookup(i_d.tag_here())
-							<< endl;
-				break;
-		}
-	}
 
 /** This class supports generation of C++ code targetting a particular C++ compiler
  *  (including any command-line options that are relevant to codegen).
