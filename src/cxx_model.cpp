@@ -18,6 +18,7 @@ using std::endl;
 using std::hex;
 using std::dec;
 using std::ostringstream;
+using std::ostream;
 using std::deque;
 using boost::optional;
 using boost::regex;
@@ -31,8 +32,9 @@ namespace dwarf {
 namespace tool {
 
 	string 
-	cxx_generator::cxx_name_from_string(const string& s, const char *prefix)
+	cxx_generator::cxx_name_from_string(const string& s) const
 	{
+		const char prefix[] = "_dwarfhpp_"; // FIXME: init from pure virtual function, cache in obj?
 		if (is_reserved(s)) 
 		{
 			cerr << "Warning: generated C++ name `" << (prefix + s) 
@@ -65,7 +67,7 @@ namespace tool {
 	}
 	
 	string // FIXME: I think liballocstool duplicates this?!
-	cxx_generator::make_valid_cxx_ident(const string& word)
+	cxx_generator::make_valid_cxx_ident(const string& word) const
 	{
 		// FIXME: make this robust to illegal characters other than spaces
 		string working = word;
@@ -74,7 +76,7 @@ namespace tool {
 	}
 	
 	string 
-	cxx_generator::name_from_name_parts(const vector<string>& parts) 
+	cxx_generator::name_from_name_parts(const vector<string>& parts) const
 	{
 		ostringstream s;
 		for (auto i_part = parts.begin(); i_part != parts.end(); i_part++)
@@ -84,26 +86,7 @@ namespace tool {
 		}
 		return s.str();
 	}
-	
-	bool 
-	cxx_generator_from_dwarf::type_infixes_name(iterator_df<basic_die> p_d)
-	{
-		auto t = p_d.as_a<type_die>();
-		//cerr << "Does this type infix a name? " << *t << endl;
-		assert(t);
-		auto unq_t = t->get_unqualified_type();
-		return 
-			unq_t && (
-			unq_t.tag_here() == DW_TAG_subroutine_type
-			||  unq_t.tag_here() == DW_TAG_array_type
-			|| 
-			(unq_t.tag_here() == DW_TAG_pointer_type &&
-				unq_t.as_a<pointer_type_die>()->get_type()
-				&& 
-				unq_t.as_a<pointer_type_die>()->get_type().tag_here() == DW_TAG_subroutine_type)
-				);
-	}
-	
+
 	bool cxx_generator_from_dwarf::cxx_type_can_be_qualified(iterator_df<type_die> p_d) const
 	{
 		if (p_d.tag_here() == DW_TAG_array_type) return false;
@@ -128,114 +111,100 @@ namespace tool {
 		else return true;
 	}
 
-	opt<string> cxx_generator_from_dwarf::referencing_ostream::can_refer_to(iterator_base i)
+	cxx_generator_from_dwarf::referencer_fn_t
+	cxx_generator_from_dwarf::get_default_referencer() const
 	{
-		string name_prefix;
-		// the null DIE reference does represent something: type void
-		if (!i) return string("void");
-		/* How do qualified names fit in to this logic? We used to have
-		 * fq_name_parts_for for DIEs that were not immediate children of a CU. */
-		switch (i.tag_here())
-		{
-			// return the friendly compiler-determined name or not, depending on argument
-			case DW_TAG_base_type:
-				if (use_friendly_base_type_names) return
-						*gen.name_for_base_type(i.as_a<base_type_die>());
-				goto handle_named_def;
-			case DW_TAG_typedef:
-				return (!!extra_prefix ? *extra_prefix : "") + *i.name_here();
-			case DW_TAG_structure_type:
-				if (i.name_here())
-				{ name_prefix = use_struct_and_union_prefixes ? "struct " : ""; goto handle_named_def; }
-				else goto handle_anonymous;
-			case DW_TAG_union_type:
-				if (i.name_here())
-				{ name_prefix = use_struct_and_union_prefixes ? "union " : ""; goto handle_named_def; }
-				else goto handle_anonymous;
-			case DW_TAG_class_type:
-				if (i.name_here())
-				{ name_prefix = use_struct_and_union_prefixes ? "class " : ""; goto handle_named_def; }
-				else goto handle_anonymous;
-			case DW_TAG_enumeration_type:
-				if (i.name_here())
-				{ name_prefix = use_struct_and_union_prefixes ? "enum " : ""; goto handle_named_def; }
-				else goto handle_anonymous;
-			default:
-				if (i.name_here()) goto handle_named_def;
-				goto handle_anonymous;
-			handle_named_def: {
-				assert(i.name_here());
-				/* In C code, we can get a problem with tagged namespaces (struct, union, enum) 
-				 * overlapping with member names (and with each other). This causes an error like
-				 * error: declaration of `cake::link_p2k_::kfs::uio_rw cake::link_p2k_::kfs::uio::uio_rw'
-				 * librump.o.hpp:1341:6: error: changes meaning of `uio_rw' from `enum cake::link_p2k_::kfs::uio_rw'
-				 *
-				 * We work around it by using the anonymous DIE name if there is a CU-toplevel 
-				 * decl of this name (HACK: should really be visible file-toplevel).
-				 */
+		return [this](iterator_base i, enum ref_kind k) -> opt<string> {
+			string name_prefix;
+			// the null DIE reference does represent something: type void
+			if (!i) return string("void");
+			/* How do qualified names fit in to this logic? We used to have
+			 * fq_name_parts_for for DIEs that were not immediate children of a CU. */
+			switch (i.tag_here())
+			{
+				case DW_TAG_base_type:
+					// return the friendly compiler-determined name or not, depending on argument
+					if (this->use_friendly_base_type_names())
+					{ return *this->name_for_base_type(i.as_a<base_type_die>()); }
+					goto handle_named_def;
+				case DW_TAG_typedef:
+					return (!!this->prefix_for_all_idents() ? *this->prefix_for_all_idents() : "") + *i.name_here();
+				case DW_TAG_structure_type:
+					if (i.name_here())
+					{ name_prefix = this->use_struct_and_union_prefixes() ? "struct " : ""; goto handle_named_def; }
+					else goto handle_anonymous;
+				case DW_TAG_union_type:
+					if (i.name_here())
+					{ name_prefix = this->use_struct_and_union_prefixes() ? "union " : ""; goto handle_named_def; }
+					else goto handle_anonymous;
+				case DW_TAG_class_type:
+					if (i.name_here())
+					{ name_prefix = this->use_struct_and_union_prefixes() ? "class " : ""; goto handle_named_def; }
+					else goto handle_anonymous;
+				case DW_TAG_enumeration_type:
+					if (i.name_here())
+					{ name_prefix = this->use_struct_and_union_prefixes() ? "enum " : ""; goto handle_named_def; }
+					else goto handle_anonymous;
+				default:
+					if (i.name_here()) goto handle_named_def;
+					goto handle_anonymous;
+				handle_named_def: {
+					assert(i.name_here());
+					/* In C code, we can get a problem with tagged namespaces (struct, union, enum) 
+					 * overlapping with member names (and with each other). This causes an error like
+					 * error: declaration of `cake::link_p2k_::kfs::uio_rw cake::link_p2k_::kfs::uio::uio_rw'
+					 * librump.o.hpp:1341:6: error: changes meaning of `uio_rw' from `enum cake::link_p2k_::kfs::uio_rw'
+					 *
+					 * We work around it by using the anonymous DIE name if there is a CU-toplevel 
+					 * decl of this name (HACK: should really be visible file-toplevel).
+					 */
 
-				// to make sure we don't get ourselves as "conflicting",
-				// we should check that we're a member_die or other non-CU-level thing
-				auto conflicting_toplevel_die = 
-					(i.parent().tag_here() != DW_TAG_compile_unit) 
-						? i.root().find_visible_grandchild_named(*i.name_here())
-						: iterator_base::END;
-				// if we get a conflict, we shouldn't be conflicting with ourselves
-				assert(!conflicting_toplevel_die || conflicting_toplevel_die != i);
-				if (!conflicting_toplevel_die)
-				{
-					return (!!extra_prefix ? *extra_prefix : "") + name_prefix
-					+ gen.cxx_name_from_string(*i.name_here(), "_dwarfhpp_");
+					// FIXME: this conflict check is too client-specific
+					
+					// to make sure we don't get ourselves as "conflicting",
+					// we should check that we're a member_die or other non-CU-level thing
+					auto conflicting_toplevel_die = 
+						(i.parent().tag_here() != DW_TAG_compile_unit) 
+							? i.root().find_visible_grandchild_named(*i.name_here())
+							: iterator_base::END;
+					// if we get a conflict, we shouldn't be conflicting with ourselves
+					assert(!conflicting_toplevel_die || conflicting_toplevel_die != i);
+					if (!conflicting_toplevel_die)
+					{
+						return (!!this->prefix_for_all_idents() ? *this->prefix_for_all_idents() : "") + name_prefix
+						+ this->cxx_name_from_string(*i.name_here());
+					}
+					assert(conflicting_toplevel_die);
+					// this is the conflicting case
+					cerr << "Warning: renaming element " << *i.name_here()
+						<< " child of " << i.parent().summary()
+						<< " because it conflicts with toplevel " << conflicting_toplevel_die.summary()
+						<< endl;
+					goto handle_anonymous;
 				}
-				assert(conflicting_toplevel_die);
-				// this is the conflicting case
-				cerr << "Warning: renaming element " << *i.name_here()
-					<< " child of " << i.parent().summary()
-					<< " because it conflicts with toplevel " << conflicting_toplevel_die.summary()
-					<< endl;
-				goto handle_anonymous;
+				/* This block means our behaviour is "we can name anything".
+				 * This means conversely that when we are asked to emit things,
+				 * everything comes out with a name, generated if necessary.
+				 * This is why the namer is used in both places: it ensures
+				 * that e.g. if we have 'typedef struct { } blah'
+				 * the inner struct is given a name and enumerated as a dependency
+				 * of the typedef, so the named struct wil lbe emitted first.
+				 * If we returned no name for the struct, it will not be a
+				 * dependency but also will not be treated as a nameable
+				 * reference when emitting the typedef, instead being inlined. */
+				handle_anonymous: {
+					// anonymous or conflicting -- both the same
+					ostringstream s;
+					s << this->get_anonymous_prefix() << hex << i.offset_here();
+					return (!!this->prefix_for_all_idents() ? *this->prefix_for_all_idents() : "") + name_prefix
+						+ s.str();
+					// we never return this
+					// return opt<string>();
+				}
 			}
-			/* This block means our behaviour is "we can name anything".
-			 * This means conversely that when we are asked to emit things,
-			 * everything comes out with a name, generated if necessary.
-			 * This is why the namer is used in both places: it ensures
-			 * that e.g. if we have 'typedef struct { } blah'
-			 * the inner struct is given a name and enumerated as a dependency
-			 * of the typedef, so the named struct wil lbe emitted first.
-			 * If we returned no name for the struct, it will not be a
-			 * dependency but also will not be treated as a nameable
-			 * reference when emitting the typedef, instead being inlined. */
-			handle_anonymous: {
-				// anonymous or conflicting -- both the same
-				ostringstream s;
-				s << "_dwarfhpp_anon_" << hex << i.offset_here();
-				return (!!extra_prefix ? *extra_prefix : "") + name_prefix
-					+ s.str();
-				// we never return this
-				// return opt<string>();
-			}
-		}
+		};
 	}
 
-
-	pair<string, bool>
-	cxx_generator_from_dwarf::cxx_decl_from_type_die(
-		iterator_df<type_die> p_d, 
-		opt<string> maybe_name/*= opt<string>()*/,
-		bool use_friendly_base_type_names /*= true*/,  
-		opt<string> extra_prefix /* = opt<string>() */,
-		bool use_struct_and_union_prefixes /* = true */ )
-	{
-		referencing_ostream namer(*this,
-			use_friendly_base_type_names,
-			extra_prefix,
-			use_struct_and_union_prefixes);
-		ostringstream name_out; name_out << (maybe_name ? *maybe_name : "");
-		ostringstream out;
-		out << make_declaration_having_type(p_d, name_out.str(), namer);
-		return make_pair(out.str(), false);
-	}
-	
 	bool 
 	cxx_generator_from_dwarf::is_builtin(iterator_df<basic_die> p_d)
 	{ 
@@ -348,39 +317,6 @@ namespace tool {
 
 		return true;
 	}
-	
-	pair<string, bool>
-	cxx_generator_from_dwarf::name_for_type(
-		iterator_df<type_die> p_d, 
-		boost::optional<string> infix_typedef_name /*= none*/,
-		bool use_friendly_base_type_names/*= true*/,
-		optional<string> extra_prefix /* = optional<string>() */,
-		bool use_struct_and_union_prefixes /* = true */
-	)
-	{
-// 		try
-// 		{
-			return cxx_decl_from_type_die(p_d, 
-				infix_typedef_name ? *infix_typedef_name : opt<string>(),
-				use_friendly_base_type_names,
-				extra_prefix ? *extra_prefix : opt<string>(),
-				use_struct_and_union_prefixes);
-// 		} 
-// 		catch (dwarf::expr::Not_supported)
-// 		{
-// 			// HACK around this strange (const (array)) case
-// 			if (p_d.tag_here() == DW_TAG_const_type
-// 			 && dynamic_pointer_cast<const_type_die>(p_d)->get_type()->get_concrete_type().tag_here()
-// 			 	== DW_TAG_array_type)
-// 			{
-// 				// assume that we will be emitting a typedef for the const type itself,
-// 				// so just output its anonymous name.
-// 				// BUT how did we emit that typedef? We would run down this same path.
-// 				return make_pair(create_ident_for_anonymous_die(p_d), false);
-// 			}
-// 			else throw;
-// 		}
-	}	
 
 	string 
 	cxx_generator_from_dwarf::name_for_argument(
@@ -396,7 +332,7 @@ namespace tool {
 		return s.str();
 	} 
 
-	string 
+	string
 	cxx_generator_from_dwarf::protect_ident(const string& ident)
 	{
 		/* In at least one reported case, the DWARF name of a declaration
@@ -420,91 +356,13 @@ namespace tool {
 		else s << ident;
 		return s.str();
 	}
-	
-	string 
-	cxx_generator_from_dwarf::make_typedef(
-		iterator_df<type_die> p_target,
-		const string& typedef_name
-	)
-	{
-		std::ostringstream out;
-		string name_to_use = cxx_name_from_string(typedef_name, "_dwarfhpp_");
-		// typedefs are named by definition, so only reserved words can cause problems
-		assert(name_to_use == typedef_name || std::find(cxx_reserved_words.begin(),
-			cxx_reserved_words.end(), typedef_name) != cxx_reserved_words.end());
 
-		// Make sure that if we're going to throw an exception, we do it before
-		// we write any output.
-		// What if the thing we're typedefing has no name?
-		// We're supposed to invent names (cxx_name_from_die) in that case.
-		// name_for_type just calls cxx_decl_from_type_die,
-		// which seems fishy, especially as we passed it 'name_to_use' as the name
-		auto decl = cxx_decl_from_type_die(p_target,
-				opt<string>(), // <-- this said 'name_to_use' but that seems wrong. We're proposing the typedef name as the name to use
-				/* use_friendly_base_type_names */ true, // FIXME: get this from caller
-				/* extra_prefix */ opt<string>(),
-				/* use_struct_and_union_prefixes */ true); // FIXME: get this from caller
-		
-		//name_for_type(p_target, name_to_use);
-		out << "typedef " << protect_ident(decl.first);
-		// HACK: we use the infix for subroutine types
-		if (!decl.second)
-		{
-			out << " " << protect_ident(name_to_use);
-		}
-		out << ";" << endl;
-		return out.str();
-	}
-	
 	string
-	cxx_generator_from_dwarf::make_function_declaration_of_type(
-		iterator_df<type_describing_subprogram_die> p_d,
-		const string& name,
-		bool write_semicolon /* = true */,
-		bool wrap_with_extern_lang /* = true */
-	)
-	{
-		std::ostringstream out;
-		string name_to_use = cxx_name_from_string(name, "_dwarfhpp_");
-		
-		string lang_to_use;
-		switch (p_d.enclosing_cu()->get_language())
-		{
-			case DW_LANG_C:
-			case DW_LANG_C89:
-			case DW_LANG_C99:
-				lang_to_use = "C";
-				break;
-			default: 
-				assert(false);
-				wrap_with_extern_lang = false;
-				break;
-		}
-		
-		if (wrap_with_extern_lang)
-		{
-			out << "extern \"" << lang_to_use << "\" {\n";
-		}
-		out << cxx_decl_from_type_die(p_d).first;
-		if (write_semicolon) out << ";";
-		out << endl;
-		if (write_semicolon && wrap_with_extern_lang) 
-		{
-			out << "} // end extern " << lang_to_use << endl;
-		}
-		
-		return out.str();
-	}
-
-	/* How do we make a generic version of this that can optionally collect
-	 * emit-{decl,def}-before dependencies? While still looking like a printer? */
-	string
-	cxx_generator_from_dwarf::make_declaration_having_type(
+	cxx_generator_from_dwarf::decl_having_type(
 		iterator_df<type_die> t,
-		const string& name_in, /* <-- this may have to become name_handler to collect deps */
-			/* and sub-ostringstreams may have to become sub-name-handlers... HMM */
-		cxx_generator_from_dwarf::referencing_ostream& namer,
-		bool emit_fp_names /* = true */
+		const string& name,
+		cxx_generator_from_dwarf::referencer_fn_t maybe_get_name,
+		bool emit_fp_names
 	)
 	{
 	/*
@@ -530,7 +388,15 @@ namespace tool {
             ) ^ ")" ))
 
 	 */
-		if (namer.can_refer_to(t)) return (namer.fresh_context() << t << " " << name_in).str();
+	 	ostringstream str;
+		if (t && t.is_a<subprogram_die>())
+		{
+			/* The namer will think we're asking if we can name the subprogram.
+			 * In this context we're not interested in that; to emit a declaration
+			 * of the subprogram's type, we need to force the expansion of that
+			 * declaration. */ // FIXME: this seems gash
+		}
+		else if (maybe_get_name(t, NORMAL)) { str << *maybe_get_name(t, NORMAL) << " " << name; goto out; }
 		assert(!!t); // namer has handled void
 		assert(!t.is_a<base_type_die>()); // ... and base types (must have name)
 		assert(!t.is_a<typedef_die>()); // and typedefs (ditto)
@@ -543,13 +409,13 @@ namespace tool {
 		}
 		else if (t.is_a<subrange_type_die>())
 		{
-			return (namer.fresh_context() << t.as_a<subrange_type_die>()->get_type()
-				<< " " << name_in).str();
+			// to declare a thing as of subrange type, just declare it as of the full type
+			str << *maybe_get_name(t.as_a<subrange_type_die>()->get_type(), NORMAL) << " " << name;
 		}
 		else if (t.is_a<address_holding_type_die>())
 		{
 			auto pointeeT = t.as_a<address_holding_type_die>()->find_type();
-			referencing_ostream o = namer.fresh_context();
+			ostringstream o;
 			bool do_paren = (pointeeT.is_a<type_describing_subprogram_die>()
 			 || pointeeT.is_a<array_type_die>());
 			string op = (t.is_a<pointer_type_die>() ? "*" :
@@ -560,11 +426,10 @@ namespace tool {
 				             +  "*/ *")
 			);
 			if (do_paren) o << "(";
-			o << op << name_in;
+			o << op << name;
 			if (do_paren) o << ")";
 			string starred_name = o.str();
-			return make_declaration_having_type(pointeeT, starred_name, namer,
-				/* emit_fp_names */ false);
+			str << decl_having_type(pointeeT, starred_name, maybe_get_name, /* emit_fp_names */ false);
 		}
 		else if (t.is_a<array_type_die>())
 		{
@@ -574,17 +439,15 @@ namespace tool {
 				|| language == DW_LANG_C 
 				|| language == DW_LANG_C99);
 			auto elT = t.as_a<array_type_die>()->find_type();
-			auto ctxt = namer.fresh_context();
-			ctxt << make_declaration_having_type(elT, name_in, namer);
+			str << decl_having_type(elT, name, maybe_get_name, emit_fp_names);
 			vector<opt<Dwarf_Unsigned> > elCounts
 			 = t.as_a<array_type_die>()->dimension_element_counts();
 			for (auto maybe_count : elCounts)
 			{
-				ctxt << "[";
-				if (maybe_count) namer << *maybe_count;
-				ctxt << "]";
+				str << "[";
+				if (maybe_count) str << *maybe_count;
+				str << "]";
 			}
-			return ctxt.str();
 		}
 		else if (t.is_a<qualified_type_die>())
 		{
@@ -597,8 +460,7 @@ namespace tool {
 					"$&") // FIXME: test this by commenting out the ?: above
 				);
 			auto innerT = t.as_a<qualified_type_die>()->find_type();
-			referencing_ostream s = namer.fresh_context(); s << qual << " " << name_in;
-			return make_declaration_having_type(innerT, s.str(), namer);
+			str << decl_having_type(innerT, qual + " " + name, maybe_get_name, emit_fp_names);
 			/* NOTE: there were some quirks in the original cxx_decl_from_type_die
 			 * implementation, splitting on cxx_type_can_be_qualified(chained_type)),
 			 * but I'm not sure what case that hit (qualified-type DIE wrapped around
@@ -607,273 +469,398 @@ namespace tool {
 		else if (t.is_a<type_describing_subprogram_die>())
 		{
 			auto rett = t.as_a<type_describing_subprogram_die>()->find_type();
-			referencing_ostream s = namer.fresh_context();
-			s << name_in << "(";
+			ostringstream ctxt;
+			ctxt << name << "(";
 			auto fp_children = t->children().subseq_of<formal_parameter_die>();
 			for (auto i_arg = fp_children.first; i_arg != fp_children.second; ++i_arg)
 			{
-				if (emit_fp_names && i_arg.name_here())
-				{
-					// FIXME: need to get arg name from our helper, to do mangling etc
-					s << *i_arg.name_here() << " ";
-				}
-				if (i_arg != fp_children.first) s << ", ";
-				s << make_declaration_having_type(i_arg->find_type(), "", namer);
+				if (i_arg != fp_children.first) ctxt << ", ";
+				ctxt << decl_having_type(i_arg->find_type(), emit_fp_names ? *i_arg.name_here() : "", maybe_get_name, false);
 			}
-			s << ")";
-			return make_declaration_having_type(
-				rett,
-				s.str(),
-				namer
-			);
+			ctxt << ")";
+			str << decl_having_type(rett, ctxt.str(), maybe_get_name, false);
 		}
 		else /*including if (t.is_a<string_type_die>()) */
 		{
+			cerr << "Confused by " << t << endl;
 			assert(false); abort();
 		}
-		assert(false); abort();
+	out:
+		return str.str();
+	}
+	
+	string
+	cxx_generator_from_dwarf::decl_of_die(
+		iterator_df<program_element_die> d,
+		cxx_generator_from_dwarf::referencer_fn_t maybe_get_name,
+		bool emit_fp_names,
+		bool write_semicolon /* = true */
+	)
+	{
+		ostringstream out;
+		if (!d) goto undeclarable;
+		if (d.is_a<variable_die>())
+		{
+			out << "extern " << decl_having_type(
+				d.as_a<variable_die>()->find_type(),
+				cxx_name_from_string(*d.name_here()), // <-- how do we pick names to use for definitions? namer should do this too?
+				maybe_get_name,
+				false) << (write_semicolon ? ";" : "") << std::endl;
+		}
+		else if (d.is_a<subprogram_die>())
+		{
+			string name_to_use = cxx_name_from_string(*d.name_here());
+			string lang_to_use;
+			// want to compare against codegen context somehow
+			switch (d.enclosing_cu()->get_language())
+			{
+				case DW_LANG_C:
+				case DW_LANG_C89:
+				case DW_LANG_C99:
+#ifdef DW_LANG_C11
+				case DW_LANG_C11:
+#endif
+					lang_to_use = "C";
+					break;
+				case DW_LANG_C_plus_plus:
+#ifdef DW_LANG_C_plus_plus_03
+				case DW_LANG_C_plus_plus_03:
+#endif
+#ifdef DW_LANG_C_plus_plus_11
+				case DW_LANG_C_plus_plus_11:
+#endif
+#ifdef DW_LANG_C_plus_plus_17
+				case DW_LANG_C_plus_plus_17:
+#endif
+					lang_to_use = "C++";
+				default: 
+					assert(false); abort();
+					break;
+			}
+			bool wrap_with_extern_lang = (language_linkage_name() != lang_to_use);
+			if (wrap_with_extern_lang)
+			{
+				out << "extern \"" << lang_to_use << "\" {\n";
+			}
+			out << decl_having_type(
+				d.as_a<subprogram_die>(),
+				name_to_use, // <-- how do we pick names to use for definitions? namer should do this too?
+				maybe_get_name,
+				true);
+			if (write_semicolon) out << ";";
+			out << endl;
+			if (write_semicolon && wrap_with_extern_lang)
+			{
+				out << "} // end extern " << lang_to_use << endl;
+			}
+		}
+		else if (d.is_a<with_data_members_die>() || d.is_a<enumeration_type_die>())
+		{
+			/* To forward-declare an aggregate type we always use the tag. */
+			string tag_prefix =
+				   (d.tag_here() == DW_TAG_structure_type) ? "struct " :
+				   (d.tag_here() == DW_TAG_union_type) ? "union " :
+				   (d.tag_here() == DW_TAG_class_type) ? "class " :
+				   (d.tag_here() == DW_TAG_enumeration_type) ? "enum " :
+				   ({ assert(false); abort(); ""; });
+			/* We can only forward-declare something we're giving a name to. */
+			opt<string> maybe_name = maybe_get_name(d, DEFINING);
+			if (maybe_name)
+			{
+				out << tag_prefix << cxx_name_from_string(*maybe_name) << (write_semicolon ? ";" : "")
+					<< std::endl;
+			}
+			else cerr << "Skipping declaration of unnameable aggregate type " << d  << endl;
+		}
+		else if (d.is_a<typedef_die>())
+		{
+			/* What does this mean? A decl of a typedef is the same as
+			 * the def of a typedef. But we don't want duplicates. So
+			 * perhaps we should never generate dependencies on the def
+			 * of a typedef. So decl is where we really output it. */
+			out << "typedef " << decl_having_type(
+				d.as_a<typedef_die>()->find_type(),
+				cxx_name_from_string(*d.name_here()), // <-- how do we pick names to use for definitions?
+				maybe_get_name,
+				false) << (write_semicolon ? ";" : "") << std::endl;
+		}
+		else if (d.is_a<type_die>())
+		{
+		undeclarable:
+			/* It's not possible to declare other types in C++; they are
+			 * just constructed from syntax where needed. */
+			cerr << "Skipping declaration of undeclareable DIE " << d << endl;
+		}
+		else
+		{
+			abort(); // not sure what hits this case
+		}
+		return out.str();;
+	}
+
+	/* Why is this a manipulator, not just a string-returner?
+	 * It's so that we can call other stuff on the stream, like inc_level()
+	 * and dec_level(). If we output a whole collection of DIEs in this way,
+	 * this is fine. But our usage model involves outputting snippets
+	 * (as strings?) which we then emit in a topsorted order. That means
+	 * the tabbing won't necessarily be right. At a minimum, to start a new
+	 * string we have to initialise the indented ostream with the right
+	 * initial tabbing level. */
+	cxx_generator_from_dwarf::strmanip_t cxx_generator_from_dwarf::defn_of_die(
+		iterator_df<program_element_die> i_d,
+		cxx_generator_from_dwarf::referencer_fn_t maybe_get_name,
+		opt<string> override_name /* = opt<string>() */,
+		bool emit_fp_names /* = true */,
+		string body /* = string() */
+	)
+	{
+		cxx_generator_from_dwarf::strmanip_t self;
+		self = [=](indenting_ostream& out) -> indenting_ostream& {
+			if (i_d.is_a<enumeration_type_die>())
+			{
+				out << "enum " 
+					<< protect_ident(*maybe_get_name(i_d.as_a<enumeration_type_die>(), NORMAL))
+					<< " { " << std::endl;
+
+				auto children_seq = i_d.children().subseq_of<enumerator_die>();
+				for (auto i_child = children_seq.first; i_child != children_seq.second; ++i_child)
+				{
+					out.inc_level();
+					out << defn_of_die(i_child, maybe_get_name);
+					out.dec_level();
+				}
+				out << std::endl;
+				out << "};" << std::endl;
+			}
+			else if (i_d.is_a<enumerator_die>())
+			{
+				auto p_d = i_d.as_a<enumerator_die>();
+				auto parent = p_d.parent().as_a<enumeration_type_die>();
+				if (parent.children().subseq_of<enumerator_die>().first != p_d)
+				{ out << ", " << endl; }
+				out << protect_ident(*p_d.name_here());
+			}
+			else if (i_d.is_a<with_data_members_die>())
+			{
+				auto p_d = i_d.as_a<with_data_members_die>();
+				out << decl_of_die(p_d,
+					maybe_get_name,
+					/* use fp names */ false);
+				if (!(p_d->get_declaration() && *p_d->get_declaration()))
+				{
+					out << " { " << std::endl;
+					out.inc_level();
+					auto children_seq = p_d.children().subseq_of<member_die>();
+					for (auto i_child = children_seq.first; i_child != children_seq.second; ++i_child)
+					{
+						out.inc_level();
+						out << defn_of_die(i_child, maybe_get_name);
+						out.dec_level();
+					}
+					out.dec_level();
+					out << "}"; // we used to do __attribute__((packed)) here....
+				}
+				else
+				{
+					/* declarations shouldn't have any member children */
+					auto ms = p_d.children().subseq_of<member_die>();
+					assert(srk31::count(ms.first, ms.second) == 0);
+				}
+				out << ";" << std::endl;
+			}
+			/* variable_die */
+			else if (i_d.is_a<variable_die>())
+			{
+				out << "/* FIXME: emitting variable definitions */" << std::endl;
+				// NOTE these must also use complete types, like members
+			}
+			else if (i_d.is_a<subprogram_die>())
+			{
+				out << decl_having_type(i_d, *i_d.name_here(), maybe_get_name, true) << endl
+					<< "{" << endl;
+				out.inc_level();
+				out << body;
+				out.dec_level();
+				out << "}" << endl;
+			}
+			else if (i_d.is_a<member_die>())
+			{
+				auto p_d = i_d.as_a<member_die>();
+
+				/* To reproduce the member's alignment, we always issue an align attribute. 
+				 * We choose our alignment so as to ensure that the emitted field is located
+				 * at the offset specified in DWARF. */
+				auto member_type = /*transform_type(*/p_d->get_type()/*, i_d)*/;
+
+				// recover the previous formal parameter's offset and size
+				iterator_df<with_data_members_die> p_type = p_d.parent().as_a<with_data_members_die>();
+				assert(p_type);
+				auto ms = p_type.children().subseq_of<member_die>();
+				auto i = ms.first;
+				auto prev_i = ms.second; // initially
+				while (i != ms.second
+					&& i.offset_here() != p_d.offset_here())
+				{ prev_i = i; ++i; }
+
+				// now i points to us, and prev_i to our predecessor
+				assert(i != ms.second); // would mean we failed to find ourselves
+
+				Dwarf_Unsigned cur_offset;
+				if (prev_i == ms.second) cur_offset = 0;
+				else 
+				{
+					auto prev_member = prev_i.as_a<member_die>();
+					assert(prev_member->get_type());
+
+					if (prev_member->get_data_member_location())
+					{
+						auto prev_member_calculated_byte_size 
+						 = /*transform_type(*/prev_member->get_type()/*, i_d)*/->calculate_byte_size();
+						if (!prev_member_calculated_byte_size)
+						{
+							cerr << "couldn't calculate size of data member " << prev_member
+								<< " so giving up control of layout in struct " << *p_type
+								<< endl;
+							cur_offset = std::numeric_limits<Dwarf_Unsigned>::max(); // sentinel value
+						}
+						else
+						{
+							cur_offset = dwarf::expr::evaluator(
+								prev_member->get_data_member_location()->at(0), 
+								p_d.spec_here(),
+								stack<Dwarf_Unsigned>(
+									// push zero as the initial stack value
+									deque<Dwarf_Unsigned>(1, 0UL)
+									)
+								).tos()
+								+ *prev_member_calculated_byte_size; 
+						}
+					}
+					else
+					{
+						cerr << "no data member location: context die is " << p_d.parent() << endl;
+						cur_offset = (p_d.parent().tag_here() == DW_TAG_union_type) 
+							? 0 : std::numeric_limits<Dwarf_Unsigned>::max();
+					}
+				}
+
+				/* This needs to handle the difficulty where in C code, we can get a problem
+				 * with tagged namespaces (struct, union, enum) 
+				 * overlapping with member names (and with each other).
+				 */
+				out << decl_having_type(p_d->find_type(), *maybe_get_name(p_d, DEFINING),
+					maybe_get_name, /* emit fp names */ false);
+				// FIXME: type must be complete! Need to pass this down!
+				// FIXME: do protect_ident() ! This is a 'name', not a 'reference'
+
+				if (p_d->get_data_member_location() && p_d->get_data_member_location()->size() == 1)
+				{
+					Dwarf_Unsigned target_offset = dwarf::expr::evaluator(
+						p_d->get_data_member_location()->at(0), 
+						p_d.spec_here(),
+						stack<Dwarf_Unsigned>(
+							// push zero as the initial stack value
+							deque<Dwarf_Unsigned>(1, 0UL)
+							)
+						).tos();
+
+					if (!(target_offset > 0 && cur_offset != std::numeric_limits<Dwarf_Unsigned>::max()))
+					{
+						out << ";";
+					}
+					else
+					{
+						/* Calculate a sensible align value for this. We could just use the offset,
+						 * but that might upset the compiler if it's larger than what it considers
+						 * the reasonable biggest alignment for the architecture. So pick a factor
+						 * of the alignment s.t. no other multiples exist between cur_off and offset. */
+						//std::cerr << "Aligning member to offset " << offset << std::endl;
+
+						// just search upwards through powers of two...
+						// until we find one s.t.
+						// searching upwards from cur_offset to factors of this power of two,
+						// our target offset is the first one we find
+						unsigned power = 1;
+						bool is_good = false;
+						const unsigned MAXIMUM_SANE_OFFSET = 1<<30; // 1GB
+						unsigned test_offset = cur_offset;
+						do
+						{
+							// if it doesn't divide by our power of two,
+							// set it to the next-highest multiple of our power
+							if (test_offset % power != 0)
+							{
+								test_offset = ((test_offset / power) + 1) * power;
+							}
+							assert(test_offset % power == 0);
+							// now we have the offset we'd get if we chose aligned(power)
+
+							// HMM: what if test_offset
+							// also divides by the *next* power of two?
+							// In that case, we will go straight through.
+							// Eventually we will get a power that is bigger than it.
+							// Then it won't be divisible.
+
+							// now test_offset is a multiple of power -- check it's our desired offset
+							is_good = (test_offset == target_offset);
+						} while (!is_good && (power <<= 1, power != 0));
+
+						if (power == 0 || test_offset < cur_offset)
+						{
+							// This happens for weird object layouts, i.e. with gaps in.
+							// Test case: start 48, target 160; the relevant power 
+							// cannot be higher than 32, because that's the highest that
+							// divides 160. But if we choose align(32), we will get offset 64.
+							out << ";" << endl;
+							out << "// WARNING: could not infer alignment for offset "
+								<< target_offset << " starting at " << cur_offset << endl;
+							if (target_offset - cur_offset < MAXIMUM_SANE_OFFSET)
+							{
+								out << "char " << "_dwarfhpp_anon_" << hex << p_d.offset_here()
+									<< "_padding[" << target_offset - cur_offset << "];" << endl;
+							}
+							else
+							{
+								out << "// FIXME: this struct is WRONG (probably until we support bitfields)" << endl;
+							}
+							power = 1;
+						}
+
+						out << " __attribute__((aligned(" << power << ")));";
+					}
+
+					out << " // offset: " << target_offset << endl;
+				}
+				else 
+				{
+					// guess at natural alignment and hope for the best
+					out << "; // no DW_AT_data_member_location, so hope the compiler gets it right" << std::endl;
+				}
+			} // end member_die case
+			else
+			{
+				out << "/* asked to define surprising DIE: " << i_d.summary() << " */" << std::endl;
+			}
+			return out;
+		};
+		return self;
 	}
 
 	srk31::indenting_ostream&
 	cxx_generator_from_dwarf::emit_definition(iterator_base i_d,
 		srk31::indenting_ostream& out,
-		referencing_ostream& namer)
+		cxx_generator_from_dwarf::referencer_fn_t namer)
 	{
-		if (i_d.is_a<enumeration_type_die>())
-		{
-			out << "enum " 
-				<< protect_ident(
-					*namer.can_refer_to(i_d.as_a<enumeration_type_die>())
-				)
-				<< " { " << std::endl;
-
-			auto children_seq = i_d.children().subseq_of<enumerator_die>();
-			for (auto i_child = children_seq.first; i_child != children_seq.second; ++i_child)
-			{
-				out.inc_level();
-				emit_definition(*i_child, out, namer);
-				out.dec_level();
-			}
-
-			out << endl << "};" << endl;
-		}
-		else if (i_d.is_a<enumerator_die>())
-		{
-			auto p_d = i_d.as_a<enumerator_die>();
-			auto parent = p_d.parent().as_a<enumeration_type_die>();
-			if (parent.children().subseq_of<enumerator_die>().first != p_d)
-			{ out << ", " << endl; }
-			out << protect_ident(*p_d.name_here());
-		}
-		else if (i_d.is_a<with_data_members_die>())
-		{
-			auto p_d = i_d.as_a<with_data_members_die>();
-			out << cxx_decl_from_type_die(p_d,
-				opt<string>(),
-				namer.use_friendly_base_type_names,
-				namer.extra_prefix,
-				/* use_struct_and_union_prefixes */ true).first;
-			if (!(p_d->get_declaration() && *p_d->get_declaration()))
-			{
-				out << " { " << std::endl;
-				out.inc_level();
-				auto children_seq = p_d.children().subseq_of<member_die>();
-				for (auto i_child = children_seq.first; i_child != children_seq.second; ++i_child)
-				{
-					out.inc_level();
-					emit_definition(*i_child, out, namer);
-					out.dec_level();
-				}
-				out.dec_level();
-				out << "}"; // we used to do __attribute__((packed)) here....
-			}
-			else
-			{
-				/* declarations shouldn't have any member children */
-				auto ms = p_d.children().subseq_of<member_die>();
-				assert(srk31::count(ms.first, ms.second) == 0);
-			}
-			out << ";" << std::endl;
-		}
-		else if (i_d.is_a<member_die>())
-		{
-			auto p_d = i_d.as_a<member_die>();
-
-			/* To reproduce the member's alignment, we always issue an align attribute. 
-			 * We choose our alignment so as to ensure that the emitted field is located
-			 * at the offset specified in DWARF. */
-			auto member_type = transform_type(p_d->get_type(), i_d);
-
-			// recover the previous formal parameter's offset and size
-			iterator_df<with_data_members_die> p_type = p_d.parent().as_a<with_data_members_die>();
-			assert(p_type);
-			auto ms = p_type.children().subseq_of<member_die>();
-			auto i = ms.first;
-			auto prev_i = ms.second; // initially
-			while (i != ms.second
-				&& i.offset_here() != p_d.offset_here())
-			{ prev_i = i; ++i; }
-
-			// now i points to us, and prev_i to our predecessor
-			assert(i != ms.second); // would mean we failed to find ourselves
-
-			Dwarf_Unsigned cur_offset;
-			if (prev_i == ms.second) cur_offset = 0;
-			else 
-			{
-				auto prev_member = prev_i.as_a<member_die>();
-				assert(prev_member->get_type());
-
-				if (prev_member->get_data_member_location())
-				{
-					auto prev_member_calculated_byte_size 
-					 = transform_type(prev_member->get_type(), i_d)->calculate_byte_size();
-					if (!prev_member_calculated_byte_size)
-					{
-						cerr << "couldn't calculate size of data member " << prev_member
-							<< " so giving up control of layout in struct " << *p_type
-							<< endl;
-						cur_offset = std::numeric_limits<Dwarf_Unsigned>::max(); // sentinel value
-					}
-					else
-					{
-						cur_offset = dwarf::expr::evaluator(
-							prev_member->get_data_member_location()->at(0), 
-							p_d.spec_here(),
-							stack<Dwarf_Unsigned>(
-								// push zero as the initial stack value
-								deque<Dwarf_Unsigned>(1, 0UL)
-								)
-							).tos()
-							+ *prev_member_calculated_byte_size; 
-					}
-				}
-				else
-				{
-					cerr << "no data member location: context die is " << p_d.parent() << endl;
-					cur_offset = (p_d.parent().tag_here() == DW_TAG_union_type) 
-						? 0 : std::numeric_limits<Dwarf_Unsigned>::max();
-				}
-			}
-
-			/* This handles the difficulty where in C code, we can get a problem
-			 * with tagged namespaces (struct, union, enum) 
-			 * overlapping with member names (and with each other).
-			 */
-			string name_to_use = *namer.can_refer_to(p_d);
-
-			auto decl = name_for_type(member_type, name_to_use);
-			// (p_d.name_here())
-			//	? name_for_type(member_type, *p_d.name_here())
-			//	: name_for_type(member_type, optional<string>());
-
-			out << protect_ident(decl.first);
-			out	<< " ";
-			if (!decl.second)
-			{
-				out << protect_ident(name_to_use);
-			}
-
-			if (p_d->get_data_member_location() && p_d->get_data_member_location()->size() == 1)
-			{
-				Dwarf_Unsigned target_offset = dwarf::expr::evaluator(
-					p_d->get_data_member_location()->at(0), 
-					p_d.spec_here(),
-					stack<Dwarf_Unsigned>(
-						// push zero as the initial stack value
-						deque<Dwarf_Unsigned>(1, 0UL)
-						)
-					).tos();
-
-				if (!(target_offset > 0 && cur_offset != std::numeric_limits<Dwarf_Unsigned>::max()))
-				{
-					out << ";";
-				}
-				else
-				{
-					/* Calculate a sensible align value for this. We could just use the offset,
-					 * but that might upset the compiler if it's larger than what it considers
-					 * the reasonable biggest alignment for the architecture. So pick a factor
-					 * of the alignment s.t. no other multiples exist between cur_off and offset. */
-					//std::cerr << "Aligning member to offset " << offset << std::endl;
-
-					// just search upwards through powers of two...
-					// until we find one s.t.
-					// searching upwards from cur_offset to factors of this power of two,
-					// our target offset is the first one we find
-					unsigned power = 1;
-					bool is_good = false;
-					const unsigned MAXIMUM_SANE_OFFSET = 1<<30; // 1GB
-					unsigned test_offset = cur_offset;
-					do
-					{
-						// if it doesn't divide by our power of two,
-						// set it to the next-highest multiple of our power
-						if (test_offset % power != 0)
-						{
-							test_offset = ((test_offset / power) + 1) * power;
-						}
-						assert(test_offset % power == 0);
-						// now we have the offset we'd get if we chose aligned(power)
-
-						// HMM: what if test_offset
-						// also divides by the *next* power of two?
-						// In that case, we will go straight through.
-						// Eventually we will get a power that is bigger than it.
-						// Then it won't be divisible.
-
-						// now test_offset is a multiple of power -- check it's our desired offset
-						is_good = (test_offset == target_offset);
-					} while (!is_good && (power <<= 1, power != 0));
-
-					if (power == 0 || test_offset < cur_offset)
-					{
-						// This happens for weird object layouts, i.e. with gaps in.
-						// Test case: start 48, target 160; the relevant power 
-						// cannot be higher than 32, because that's the highest that
-						// divides 160. But if we choose align(32), we will get offset 64.
-						out << ";" << endl;
-						out << "// WARNING: could not infer alignment for offset "
-							<< target_offset << " starting at " << cur_offset << endl;
-						if (target_offset - cur_offset < MAXIMUM_SANE_OFFSET)
-						{
-							out << "char " << "_dwarfhpp_anon_" << hex << p_d.offset_here()
-								<< "_padding[" << target_offset - cur_offset << "];" << endl;
-						}
-						else
-						{
-							out << "// FIXME: this struct is WRONG (probably until we support bitfields)" << endl;
-						}
-						power = 1;
-					}
-
-					out << " __attribute__((aligned(" << power << ")));";
-				}
-
-				/*<< " static_assert(offsetof(" 
-					<< name_for_type(compiler, p_type, boost::optional<const std::string&>())
-					<< ", "
-					<< protect_ident(*d.get_name())
-					<< ") == " << offset << ");" << */
-
-				out << " // offset: " << target_offset << endl;
-			}
-			else 
-			{
-				// guess at natural alignment and hope for the best
-				out << "; // no DW_AT_data_member_location, so hope the compiler gets it right" << std::endl;
-			}
-		}
+		out << defn_of_die(i_d, namer, /* override_name */ opt<string>(),
+			/* fp names */ true, /* body */ "");
 		return out;
 	}
-	
 
 /* from dwarf::tool::cxx_target */
 	optional<string>
-	cxx_target::name_for_base_type(iterator_df<base_type_die> p_d)
+	cxx_target::name_for_base_type(iterator_df<base_type_die> p_d) const
 	{
-		map<base_type, string>::iterator found = base_types.find(
-			base_type(p_d));
+		auto found = base_types.find(base_type(p_d));
 		if (found == base_types.end()) return optional<string>();
 		else return found->second;
 	}

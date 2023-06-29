@@ -36,6 +36,7 @@ using dwarf::core::root_die;
 using dwarf::core::abstract_die;
 using dwarf::core::type_set;
 using dwarf::core::subprogram_die;
+using dwarf::core::with_data_members_die;
 using dwarf::tool::gather_interface_dies;
 
 int main(int argc, char **argv)
@@ -96,15 +97,45 @@ int main(int argc, char **argv)
 				);
 	});
 
-// 	if (subprogram_names.size() > 0)
-// 	{
-// 	
-// 	}
-// 	else
-// 	{
-// 		target.emit_all_decls(r);
-// 	}
-	target.emit_decls(dies);
+	//target.emit_decls(dies);
+		/* We now don't bother doing the topological sort, so we just
+	 * forward-declare everything that we can. */
+	set<iterator_base> to_fd;
+	for (auto i_i_d = dies.begin(); i_i_d != dies.end(); ++i_i_d)
+	{
+		auto i_d = *i_i_d;
+		if (i_d.is_a<with_data_members_die>() && i_d.name_here())
+		{
+			to_fd.insert(i_d);
+		}
+	}
+	if (to_fd.size() > 0)
+	{
+		s << "// begin a group of forward decls" << endl;
+		for (auto i = to_fd.begin(); i != to_fd.end(); i++)
+		{
+			bool is_struct = (*i).tag_here() == DW_TAG_structure_type;
+			bool is_union = (*i).tag_here() == DW_TAG_union_type;
+
+			assert((is_struct || is_union) && (*i).name_here());
+
+			s << (is_struct ? "struct " : "union ") << target.protect_ident(*(*i).name_here()) 
+				<< "; // forward decl" << std::endl;
+		}
+		s << "// end a group of forward decls" << std::endl;
+	}
+	set<iterator_base> emitted;
+	auto i_i_d = dies.begin();
+	while (i_i_d != dies.end())
+	{
+		if (emitted.find(*i_i_d) != emitted.end()) goto next;
+		/* Everything in the slice is either an object (incl. function) or a type. */
+		// FIXME: call the target to emit a decl...
+		// ... the only exception being structs which need a def
+	next:
+		i_i_d = dies.erase(i_i_d);
+	}
+
 
 	return 0;
 }

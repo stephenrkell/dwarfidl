@@ -2,6 +2,7 @@
 #include <cassert>
 #include <string>
 #include <vector>
+#include <map>
 #include <set>
 #include <sstream>
 #include <cmath>
@@ -17,8 +18,10 @@ using namespace srk31;
 using namespace dwarf;
 using namespace dwarf::lib;
 using std::vector;
+using std::pair;
 using std::set;
 using std::map;
+using std::multimap;
 using std::string;
 using std::cerr;
 using std::endl;
@@ -40,6 +43,202 @@ using dwarf::spec::opt;
 
 namespace dwarf { namespace tool {
 
+void dwarfidl_cxx_target::transitively_close(
+	set<std::pair<dwarfidl_cxx_target::emit_kind, iterator_base> > const& to_output,
+	cxx_generator_from_dwarf::referencer_fn_t maybe_get_name,
+	/* TODO: accept 'definer', e.g. for noopgen? */
+	map<std::pair<dwarfidl_cxx_target::emit_kind, iterator_base>, string >& output_fragments,
+	multimap< std::pair<dwarfidl_cxx_target::emit_kind, iterator_base>, std::pair<dwarfidl_cxx_target::emit_kind, iterator_base> >& order_constraints
+)
+{
+	// 1. pre-populate -- this is something the client tool does
+	// by giving us a set<pair<emit_kind, iterator_base> >,
+	// but we turn it into a vector so that we can use it as a workload (add to the back)
+	// ... and we also keep a set representation so we can test for already-presentness
+	set<std::pair<emit_kind, iterator_base> > output_expanded;
+	vector <std::pair<emit_kind, iterator_base> > worklist;
+	auto maybe_add_to_worklist = [&]( std::pair<emit_kind, iterator_base> const& el) {
+		// only add something if it's new
+		auto inserted = output_expanded.insert(el);
+		if (!inserted.second) return; // nothing was inserted, i.e. it was already present
+		worklist.push_back(el);
+	};
+	for (auto el : to_output) maybe_add_to_worklist(el);
+
+	// 2. transitively close -- this is something we do. How? By calling
+	// the printer and adding to to_emit the named dependencies it tells us about.
+	// Once we've printed everything in to_emit, we have full ordering info.
+	bool changed = true;
+	while (!worklist.empty())
+	{
+		changed = false; // we haven't yet changed anything this cycle
+		bool saw_missing_fragment = false;
+		/* Traverse the whole worklist... we may append to the list during the loop. */
+		auto i_pair = worklist.begin();
+		while (i_pair != worklist.end())
+		{
+			auto& the_pair = *i_pair;
+			// FIXME: if 'referencer' was just a function, much boilerplate would go...
+			// this is basically a lambda capturing locals.  Is a refactoring feasible?
+			auto maybe_get_name_tracking_deps
+			= [&](iterator_base i, enum ref_kind k) -> opt<string> {
+				opt<string> ret = maybe_get_name(i, k);
+				if (!ret || k == cxx_generator::DEFINING) return ret;
+				/* If we generate a name, record it as a dependency
+				 * against the current DIE. We rely on the caller
+				 * to tell us if they require a complete type. Otherwise
+				 * just a declaration will suffice. HMM. "Declared before"
+				 * vs "declared anywhere" is a distinction we don't capture. */
+				if (k == cxx_generator::TYPE_MUST_BE_COMPLETE)
+				{
+					// if the referred-to type is concrete i.e. not a qualified
+					// or typedef, just add the DEF dependency
+					if (i && i.is_a<type_die>()
+						&& i.as_a<type_die>()->get_concrete_type() == i)
+					{
+						auto new_pair = make_pair(EMIT_DEF, i);
+						order_constraints.insert(make_pair(the_pair, new_pair));
+						maybe_add_to_worklist(new_pair);
+					}
+					else if (i && i.is_a<type_die>())
+					{
+						// the typedef must come first, but also...
+						// FIXME: should this add everything on the chain, not just
+						// the concrete?
+						auto immediate_pair = make_pair(EMIT_DECL, i);
+						order_constraints.insert(make_pair(the_pair, immediate_pair));
+						maybe_add_to_worklist(immediate_pair);
+						auto concrete_pair = make_pair(EMIT_DEF, 
+							i.as_a<type_die>()->get_concrete_type());
+						order_constraints.insert(make_pair(the_pair, concrete_pair));
+					}
+					else
+					{
+						// anything here?
+						abort();
+					}
+				}
+				else
+				{
+					auto default_pair = make_pair(EMIT_DECL, i);
+					order_constraints.insert(make_pair(the_pair, default_pair));
+					maybe_add_to_worklist(default_pair);
+				}
+				return ret;
+
+			};
+#if 0
+			struct dep_tracking_referencer : referencer
+			{
+				multimap< std::pair<emit_kind, iterator_base>, std::pair<emit_kind, iterator_base> >& order_constraints;
+				std::pair<emit_kind, iterator_base> referring;
+				set<std::pair<emit_kind, iterator_base> >& output_expanded;
+				vector <std::pair<emit_kind, iterator_base> >& worklist;
+				bool& changed;
+				std::function<void(std::pair<emit_kind, iterator_base> const&)> maybe_add_to_worklist;
+				/* In the process of generating the code fragment for
+				 * the_pair, anything that is emitted as a name
+				 * will be recorded as a dependency. */
+				dep_tracking_referencer(
+					referencer& wrapped,
+					multimap< std::pair<emit_kind, iterator_base>, std::pair<emit_kind, iterator_base> >& order_constraints,
+					std::pair<emit_kind, iterator_base> referring,
+					set<std::pair<emit_kind, iterator_base> >& output_expanded,
+					vector <std::pair<emit_kind, iterator_base> >& worklist,
+					bool& changed,
+					std::function<void(std::pair<emit_kind, iterator_base> const&)> maybe_add_to_worklist
+				) : referencer(wrapped), order_constraints(order_constraints),
+				referring(referring), output_expanded(output_expanded), worklist(worklist),
+				changed(changed), maybe_add_to_worklist(maybe_add_to_worklist) {}
+				opt<string> can_name(iterator_base i, bool type_must_be_complete) const
+				{
+				}
+			} our_r(r, order_constraints, the_pair, output_expanded, worklist, changed, maybe_add_to_worklist);
+			// try to generate a string.
+			// Some DIEs will just emit nothing because e.g. for "const int",
+			// no definition is needed, only a dependency in "int" (which itself
+			// will emit nothing when 'declared' or 'defined').
+#endif
+			string to_add;
+			switch (the_pair.first)
+			{
+				case EMIT_DECL: {
+					ostringstream s;
+					s << decl_of_die(
+						the_pair.second,
+						maybe_get_name_tracking_deps,
+						/* emit_fp_names = */ true,
+						/* emit_semicolon = */ true
+					);
+					output_fragments[the_pair] = s.str(); changed = true;
+				} break;
+				case EMIT_DEF: {
+					ostringstream s;
+					indenting_ostream out(s);
+					out << defn_of_die(
+						the_pair.second,
+						maybe_get_name_tracking_deps,
+						/* override_name = */ opt<string>(),
+						/* emit_fp_names = */ true,
+						/* body = */ string()
+					);
+					output_fragments[the_pair] = s.str(); changed = true;
+				} break;
+				default:
+					assert(false); abort();
+			}
+			// we've just processed one worklist item
+			i_pair = worklist.erase(i_pair);
+		} // end while worklist
+		// if we're about to terminate, we should not have seen any missing fragment
+	}
+	
+	// now the caller has the output fragments and order constraints
+}
+
+void dwarfidl_cxx_target::write_ordered_output(
+		map<pair<emit_kind, iterator_base>, string > output_fragments /* by value: copy */,
+		multimap< pair<emit_kind, iterator_base>, pair<emit_kind, iterator_base> >& order_constraints
+	)
+{
+	std::ostream& out = std::cout; /* FIXME: take as arg */
+	set <pair<emit_kind, iterator_base> > emitted;
+	/* We output what we can, until there's nothing left. */
+	while (!output_fragments.empty())
+	{
+		bool removed_one = false;
+		auto i_pair = output_fragments.begin();
+		while (i_pair != output_fragments.end())
+		{
+			auto& el = i_pair->first;
+			auto& frag = i_pair->second;
+			/* Can we emit this? */
+			auto deps_seq = order_constraints.equal_range(i_pair->first);
+			bool all_sat = true;
+			for (auto i_dep = deps_seq.first; i_dep != deps_seq.second; ++i_dep)
+			{
+				auto& dep = i_dep->second;
+				bool already_emitted = (emitted.find(dep) != emitted.end());
+				all_sat &= already_emitted;
+			}
+			if (all_sat)
+			{
+				// emit this fragment
+				out << frag;
+				// add to the emitted set
+				auto retpair = emitted.insert(el);
+				assert(retpair.second); // really inserted
+				// remove from output fragmnets
+				i_pair = output_fragments.erase(i_pair);
+				removed_one = true;
+			}
+			else /* continue to next */ ++i_pair;
+		}
+		if (!removed_one) { assert(false); abort(); } /* lack of progress */
+	}
+}
+
+#if 0
 void dwarfidl_cxx_target::emit_forward_decls(const set<iterator_base>& fds)
 {
 	if (fds.size() > 0)
@@ -57,53 +256,6 @@ void dwarfidl_cxx_target::emit_forward_decls(const set<iterator_base>& fds)
 		}
 		out << "// end a group of forward decls" << std::endl;
 	}
-}
-
-// this is the base case
-void dwarfidl_cxx_target::emit_all_decls(root_die& r)
-{
-	/* What does "emit all decls" mean? 
-	 * In general we want to recursively walk the DIEs
-	 * and emit anything which we can emit
-	 * and which we haven't already emitted.
-	 * For each DIE that is something we can put into a header,
-	 * we emit a declaration.
-	 * 
-	 * For types, we emit them if we haven't already emitted them.
-	 * 
-	 * For objects (functions, variables), we emit them if they are
-	 * non-declarations.
-	 * 
-	 * For DIEs that contain other DIEs, we emit the parent as
-	 * an enclosing block, and recursively emit the children.
-	 * This holds for namespaces, struct/class/union types,
-	 * functions (where the "enclosed block" is the bracketed
-	 * part of the signature) and probably more.
-	 *
-	 * For each declaration we emit, we should check that the
-	 * ABI a C++ compiler will generate from our declaration is
-	 * compatible with the ABI that our debugging info encodes.
-	 * This means that for functions, we check the symbol name.
-	 * We should also check base types (encoding) and structured
-	 * types (layout). For now we just use alignment annotations.
-	 *
-	 * Complication! For dependency reasons, we forward-declare
-	 * everything we reasonably can first.
-	 */
-	
-	map< vector<string>, iterator_base > toplevel_decls_emitted;
-	
-	set<iterator_base> dies;
-	dwarf::core::type_set types;
-	gather_interface_dies(r, dies, types, [/*subprogram_names*/](const iterator_base& i){
-		/* This is the basic test for whether an interface element is of 
-		 * interest. For us, it's just whether it's a visible subprogram in our list. */
-		return true; //i_subp && i_subp.name_here() 
-			//&& (!i_subp->get_visibility() || *i_subp->get_visibility() == DW_VIS_exported)
-			//&& (subprogram_names.find(*i_subp.name_here()) != subprogram_names.end());
-	});
-	
-	emit_decls(dies);
 }
 
 void dwarfidl_cxx_target::emit_decls(set<iterator_base>& dies)
@@ -127,7 +279,7 @@ void dwarfidl_cxx_target::emit_decls(set<iterator_base>& dies)
 	}
 	emit_forward_decls(to_fd);
 	
-	// FIXMEs:
+	// FIXMEs for noopgen:
 	// - not emitting named function typedefs (make_precise_fn_t)
 	// - function arguments going astray entirely: __lookup_bigalloc_top_level, mmap, ...
 	// - typedefs of arrays are coming out wrong
@@ -139,30 +291,8 @@ void dwarfidl_cxx_target::emit_decls(set<iterator_base>& dies)
 	// - C vs C++ issues: struct tags, "_Bool", etc.
 	// - nameless function typedefs after big_allocation (3805..31e6)
 	
-	set<iterator_base> emitted;
 
-	/* I started writing a bunch of things like this... */
-#if 0
-	enum anonymous_emit_method {
-		EMIT_INLINE,
-		EMIT_WITH_GENERATED_NAME
-	};
-	enum base_type_reference_method {
-		EMIT_USING_COMPILER_INFO,
-		EMIT_AS_IF_TYPEDEF
-	};
-	enum typedef_emit_method {
-		NO_EMIT_TYPEDEF,
-		EMIT_TYPEDEF
-	};
-#endif
-	/* ... but these seem more like roughly per-method overrides.
-	 * So instead let's use "static polymorphism" here. */
-	enum dep_kind {
-		DEP_DECL,
-		DEP_DEF
-	};
-	multimap< iterator_base, pair<dep_kind, iterator_base> > dependencies;
+
 
 	/* Just what does "dependency" mean here?
 	 * It means another thing that must be emitted before we can emit the first thing.
@@ -176,344 +306,9 @@ void dwarfidl_cxx_target::emit_decls(set<iterator_base>& dies)
 	 * (2) how we are using the thing (pointer-to-struct? forward-decl is enough;
 	 *        instantiate struct? forward-decl is not enough)
 	 */
-#if 0
-	struct name_emitter
-	{
-
-		opt<string> name_referring_to_anonymous(iterator_df<basic_die> i)
-		{ return opt<string>(); /* forces inline treatment of anonymouses */ }
-		opt<string> name_referring_to(iterator_df<basic_die> i)
-		{ return i.name_here() ?: name_referring_to_anonymous(i); }
-		/* Now if I supply overrides like... */
-		opt<string> name_referring_to(iterator_df<base_type_die> i)
-		{  }
-		/* ... how do I ensure they get dispatched to? Or even
-		 * using template <Dwarf_Half tag> ... ? */
-
-		set<pair<dep_kind, iterator_base> > get_dependencies(iterator_base i)
-		{
-			/* Enumerate what any given DIE depends on. Whenever we get
-			 * a DIE that we depend on, use name_referring_to and see what
-			 * it says. If it comes back with a name, we depend on that
-			 * named thing. If it comes back with no name, we don't depend
-			 * on that named thing but we will have to inline that definition
-			 * e.g. of an anonymous struct.
-			 *
-			 * So really we are doing the emission, just in a no-op mode
-			 * where we don't actually emit anything, just record dependencies.
-			 * So this should really be implemented as a parameterisation of
-			 * our .
-			 *
-			 * "Can we refer to it by name [in this context]?"
-			 * If we can, get the name. Emit: use it.
-			 *                          DepRecord: depend on a decl/def of it.
-			 * If we can't, decompose.  Emit: use the parts to accumulate the name.
-			 *                          DepRecord: depend on a decl/def of each part.
-			 *
-			 * /*namer << t << "name" ;*/
-			 * What about the very top level?
-			 */
-		
-		}
-	};
-
-	std::function<void(iterator_base)> collect_named_dependencies
-	 = [&dependencies, collect_named_dependencies](iterator_base i) {
-		auto add_dependency = [&dependencies, &i](iterator_base j) {
-			dependencies.insert(make_pair(i, j));
-		};
-		// if it's forward-declared, we don't bother counting it as a dependency
-		if (i.is_a<with_data_members_die>() && i.name_here()) return;
-		if (i.is_a<base_type_die>()) return; // base types are always available
-		if (i.is_a<type_chain_die>())
-		{ collect_named_dependencies(i.as_a<type_chain_die>()->find_type()); }
-		else if (i.is_a<variable_die>())
-		{ collect_named_dependencies(i.as_a<variable_die>()->find_type()); }
-		else if (i.is_a<with_data_members_die>()) // anonymous case
-		{
-			// what about the with-data-members itself? no, it's not named
-			// (In practice, we may give it a name. And if we do, anything
-			// depending on it 
-			auto children = i.children().subseq_of<member_die>();
-			for (auto i_child = children.first; i_child != children.second; ++i_child)
-			{
-				add_dependency(i_child->find_type());
-			}
-		}
-		else if (i.is_a<type_describing_subprogram_die>())
-		{
-			if (i.as_a<type_describing_subprogram_die>()->get_type())
-			{
-				collect_named_dependencies(i.as_a<type_describing_subprogram_die>()->find_type());
-			}
-			auto children = i.children().subseq_of<member_die>()
-			for (auto i_child = children.first; i_child != children.second; ++i_child)
-			{
-				collect_named_dependencies(i_child->find_type());
-			}
-		}
-		else { /* what goes here? */ }
-	};
-#endif
-	auto can_emit_now = [dependencies](iterator_base i) -> bool {
-		// gather dependencies
-		/* Now test whether all dependencies are emitted. */
-#if 0
-		for (auto i_dep = dependencies.begin(); i_dep != dependencies.end(); ++i_dep)
-		{
-			if (emitted.find(i_dep) == emitted.end()) return false;
-		}
-#endif
-		return true;
-	};
-	multimap< vector<opt<string > >, iterator_base > emitted_by_path;
-	auto need_to_emit = [&emitted_by_path, &emitted, this](iterator_base i) -> bool {
-		/* We check whether exactly we have been declared already */
-		if (emitted.find(i) != emitted.end()) return false;
-		/* Also check whether something of this name has been declared already. */
-		vector< opt<string> > ident_path;
-		bool path_is_complete = true;
-		for (iterator_df<> p = i; p.is_a<compile_unit_die>(); p = p.parent())
-		{
-			auto maybe_name = i.name_here();
-			path_is_complete &= !!maybe_name;
-			ident_path.push_back(maybe_name);
-		}
-		if (path_is_complete && ident_path.size() == 1)
-		{
-			auto found = emitted_by_path.equal_range(ident_path);
-			if (found.first != found.second)
-			{
-				/* This means we would be redecling if we emitted here. */
-				auto &previous = found.first->second;
-				auto &current = i;
-				auto print_name_parts = [](const vector<opt<string> >& ident_path)
-				{
-					for (auto i_name_part = ident_path.begin();
-						i_name_part != ident_path.end(); ++i_name_part)
-					{
-						if (i_name_part != ident_path.begin()) cerr << " :: ";
-						cerr << (*i_name_part ? **i_name_part : "(anonymous)");
-					}
-				};
-				/* In the case of types, we output a warning. */
-				if (current.is_a<type_die>() && previous.is_a<type_die>())
-				{
-					if (current.as_a<type_die>()->summary_code() != 
-					previous.as_a<type_die>()->summary_code())
-					{
-						cerr << "Warning: saw rep-incompatible types with "
-								"identical toplevel names: ";
-						print_name_parts(ident_path);
-						cerr << endl;
-					}
-				}
-				// we should skip this
-				cerr << "Skipping redeclaration of DIE named ";
-				print_name_parts(ident_path);
-				cerr << i.summary();
-				cerr << " already emitted as "
-					<< previous.summary()
-					<< endl;
-				return false;
-			}
-
-			/* At this point, we are going to give the all clear to emit.
-			 * But we want to remember this, so we can skip future redeclarations
-			 * that might conflict. */
-
-			/* Some declarations are harmless to emit, because they never 
-			 * conflict (forward decls). We won't bother remembering these. */
-			auto as_program_element
-			 = i.as_a<program_element_die>();
-			bool is_harmless_fwddecl = as_program_element
-				&& as_program_element->get_declaration()
-				&& *as_program_element->get_declaration();
-
-			// if we got here, we will go ahead with emitting;
-			// if it generates a name, remember this!
-			// NOTE that dwarf info has been observed to contain things like
-			// DW_TAG_const_type, type structure (see evcnt in librump.o)
-			// where the const type and the structure have the same name.
-			// We won't use the name on the const type, so we use the
-			// cxx_type_can_have_name helper to rule those cases out.
-			auto is_type = i.as_a<type_die>();
-			if ( (!is_type || (is_type && this->cxx_type_can_have_name(is_type)))
-			&&   !is_harmless_fwddecl
-			   )
-			{
-				// toplevel_decls_emitted.insert(make_pair(*opt_ident_path, i));
-			}
-		} // end if path is complete and size 1
-		// we remember what we've okayed and never okay the same thing twice
-		emitted.insert(i);
-		emitted_by_path.insert(make_pair(ident_path, i));
-		return true;
-	};
 	bool use_friendly_base_type_names = true;
-	referencing_ostream namer(*this, use_friendly_base_type_names,
+	referencer namer(*this, use_friendly_base_type_names,
 		spec::opt<string>(), /* use_struct_and_union_prefixes */ true);
-	auto i_i_d = dies.begin();
-	while (!dies.empty())
-	{
-		auto i_i_d = dies.begin();
-		bool removed_one = false;
-		while (i_i_d != dies.end())
-		{
-			auto i_d = *i_i_d;
-			// only emit if dependencies allow
-			if (can_emit_now(i_d))
-			{
-				cerr << "Now dispatching " << i_d.summary() << endl;
-				if (need_to_emit(i_d))
-				{
-					iterator_df<type_die> t = iterator_base::END;
-					opt<string> maybe_n = namer.can_refer_to(i_d);
-					string n;
-					bool emit_semicolon = true;
-					if (i_d.is_a<core::with_type_describing_layout_die>())
-					{
-						// this includes variables but also members
-						t = i_d.as_a<core::with_type_describing_layout_die>()->find_type();
-						n = *maybe_n;
-					}
-					else if (i_d.is_a<subprogram_die>())
-					{
-						t = i_d.as_a<type_die>();
-						n = *maybe_n;
-					}
-					else if (i_d.is_a<core::typedef_die>())
-					{
-						t = i_d.as_a<core::typedef_die>()->find_type();
-						n = *maybe_n;
-						out << "typedef ";
-					}
-					else if (i_d.is_a<core::base_type_die>() &&
-						!use_friendly_base_type_names)
-					{
-						// this case is like a typedef...
-						// where the named type is the real base type name
-						auto i_b = i_d.as_a<core::base_type_die>();
-						optional<string> real_n = name_for_base_type(i_b);
-						// and the typedef name is something we invent
-						// typedef the friendly name as the 
-						string invented_name = cxx_name_from_string(*i_b.name_here(), "");
-						out << "typedef " << *real_n << invented_name;
-						// FIXME: conflicts of invented name with something else?
-						// we really want our namer to handle this.
-						// Where does this fit in what the namer can do?
-						// Really it should be able to handle all of this for us.
-						// We should be able to ask it whether it can name
-						// the base type under its current behaviour, and
-						// only emit the typedef (meaning a dependency)
-						// if it says this is necessary. And it should emit it!
-					}
-					else if (i_d.is_a<core::base_type_die>())
-					{
-						// no need to emit anything
-						goto next;
-					}
-					else if (i_d.is_a<type_die>())
-					{
-						// We have a type that our namer can name,
-						// but we need to ensure it is actually defined by that name.
-						/*
-						 HMM! This is a dependency issue!
-n						 But wait.
-						 Our slice was also collected by following dependencies.
-						 We generate a slice by following "dependencies" backwards
-						 from DIEs in our slicing criterion, where "A depends on B"
-						 if A occurring as part of an interface definition
-						 (function signatures, variable declarations)
-						 requires B to be available in that same definition.
-						 This is invariably because B is [part of] a type involved in A somehow
-						 (A may or may not be a type or part of one; it may be
-						 a variable or subprogram).
-						 These dependencies may be circular.
-						 
-						 We have a different notion of dependency here.
-						 In fact we have three!
-						 "Must be declared before declaring",
-						 "must be declared before defining",
-						 "must be defined before defining"
-						 (defined-before-declaring? I think this doesn't
-						  exist at least in C, e.g. compiler happily lets you
-						  can create a function pointer whose return type
-						  is opaque, just not call it)
-						
-						 'emitted' is not enough; need
-						 emitted decl, emitted def, can emit decl, can emit def.
-						 some things we only decl, not def  (vars, subprograms)
-						 some things we both decl and def   (struct types)
-						 for some things decl and def are the same (typedef)
-						 decl'd always implies def'd, i.e. a preceding def is enough.
-						 
-						 How do we gather these emit-before dependencies?
-						 Our 'namer' can help, but to what extent?
-						 When a name it used, it implies that at least a decl must exist.
-						 *In some contexts* a def must also exist, e.g. instantiating
-						  a struct type.
-						 How can we elicit this distinction?
-						 We could use an 'endl'-like thing in the stream output.
-						 Perhaps the thing to do is write the dependency-gathering
-						 
-						 Typedefs confuse "defined": a typedef of an incomplete
-						 struct def is itself 'defined', but the struct remains not so.
-						 Do we need to define "fully defined"?
-						 Do we ever depend on being defined but not depend on fully-defined?
-						 
-						 Maybe we need "fulldecl" versus "fwddecl" (two ways we can emit)
-						           and "ref" and "fullref".
-						 Emitting a "fullref" requires its referent to be transitively fully declared.
-						 But hmm, this is not quite right. If I have a function
-						 g(struct foo x, struct bar *y)
-						 it makes a fullref to x and y, but
-						 y doesn't transitively require struct bar to be fully defined.
-						 We need something short of "transitive"
-						 that sees through typedef_die but does not see through pointer_type_die.
-						 Can think of typedef as porous to fullref: "a fullref to a typedef
-						    implies a fullref
-						 
-						 We have another example of slicing though:
-						 noopgen is generating 
-						 
-						 We could imagine other applications, e.g. pasting the
-						 (post-preprocessing) body of a function
-						 into a context where it can be recompiled individually.
-						 But again that really only requires the interface as context.
-						 It seems hard to think of an example where the internals
-						 of a function are actually an important part of the slice.
-						 
-						 
-						 
-						 
-						 * */
-						// HMM. This is probably wrong
-						cerr << "Next decl is probably wrong!" << endl;
-						t = i_d.as_a<type_die>();
-						n = "";
-					}
-					else
-					{
-						abort();
-					}
-					string decl = make_declaration_having_type(t, n, namer,
-						/* emit_fp_names */ true);
-					cerr << "Made decl: " << decl << endl;
-					out << decl;
-					if (emit_semicolon) out << ";";
-					out << std::endl;
-				}
-				// remove what we emit
-			next:
-				i_i_d = dies.erase(i_i_d);
-				removed_one = true;
-			}
-			else ++i_i_d;
-		}
-		assert(removed_one);
-		// we go around again
-	}
 }
-
+#endif
 } } // end namespace dwarf::tool
