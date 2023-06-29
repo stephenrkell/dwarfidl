@@ -127,38 +127,6 @@ void dwarfidl_cxx_target::transitively_close(
 				return ret;
 
 			};
-#if 0
-			struct dep_tracking_referencer : referencer
-			{
-				multimap< std::pair<emit_kind, iterator_base>, std::pair<emit_kind, iterator_base> >& order_constraints;
-				std::pair<emit_kind, iterator_base> referring;
-				set<std::pair<emit_kind, iterator_base> >& output_expanded;
-				vector <std::pair<emit_kind, iterator_base> >& worklist;
-				bool& changed;
-				std::function<void(std::pair<emit_kind, iterator_base> const&)> maybe_add_to_worklist;
-				/* In the process of generating the code fragment for
-				 * the_pair, anything that is emitted as a name
-				 * will be recorded as a dependency. */
-				dep_tracking_referencer(
-					referencer& wrapped,
-					multimap< std::pair<emit_kind, iterator_base>, std::pair<emit_kind, iterator_base> >& order_constraints,
-					std::pair<emit_kind, iterator_base> referring,
-					set<std::pair<emit_kind, iterator_base> >& output_expanded,
-					vector <std::pair<emit_kind, iterator_base> >& worklist,
-					bool& changed,
-					std::function<void(std::pair<emit_kind, iterator_base> const&)> maybe_add_to_worklist
-				) : referencer(wrapped), order_constraints(order_constraints),
-				referring(referring), output_expanded(output_expanded), worklist(worklist),
-				changed(changed), maybe_add_to_worklist(maybe_add_to_worklist) {}
-				opt<string> can_name(iterator_base i, bool type_must_be_complete) const
-				{
-				}
-			} our_r(r, order_constraints, the_pair, output_expanded, worklist, changed, maybe_add_to_worklist);
-			// try to generate a string.
-			// Some DIEs will just emit nothing because e.g. for "const int",
-			// no definition is needed, only a dependency in "int" (which itself
-			// will emit nothing when 'declared' or 'defined').
-#endif
 			string to_add;
 			switch (the_pair.first)
 			{
@@ -241,77 +209,4 @@ void dwarfidl_cxx_target::write_ordered_output(
 	}
 }
 
-#if 0
-void dwarfidl_cxx_target::emit_forward_decls(const set<iterator_base>& fds)
-{
-	if (fds.size() > 0)
-	{
-		out << "// begin a group of forward decls" << endl;
-		for (auto i = fds.begin(); i != fds.end(); i++)
-		{
-			bool is_struct = (*i).tag_here() == DW_TAG_structure_type;
-			bool is_union = (*i).tag_here() == DW_TAG_union_type;
-
-			assert((is_struct || is_union) && (*i).name_here());
-
-			out << (is_struct ? "struct " : "union ") << protect_ident(*(*i).name_here()) 
-				<< "; // forward decl" << std::endl;
-		}
-		out << "// end a group of forward decls" << std::endl;
-	}
-}
-
-void dwarfidl_cxx_target::emit_decls(set<iterator_base>& dies)
-{
-	/* We now don't bother doing the topological sort, so we just
-	 * forward-declare everything that we can.
-	 * PROBLEM: anything can depend on a typedef, and
-	 * typedefs can depend on typedefs.
-	 * Instead of an up-front topsort we can probably just do a fixed-point
-	 * iteration: emit anything whose dependencies have been emitted,
-	 * and keep doing that until nothing is left.
-	 */
-	set<iterator_base> to_fd;
-	for (auto i_i_d = dies.begin(); i_i_d != dies.end(); ++i_i_d)
-	{
-		auto i_d = *i_i_d;
-		if (i_d.is_a<with_data_members_die>() && i_d.name_here())
-		{
-			to_fd.insert(i_d);
-		}
-	}
-	emit_forward_decls(to_fd);
-	
-	// FIXMEs for noopgen:
-	// - not emitting named function typedefs (make_precise_fn_t)
-	// - function arguments going astray entirely: __lookup_bigalloc_top_level, mmap, ...
-	// - typedefs of arrays are coming out wrong
-	// - extra parens around non-pointed functions?
-	// - bitfields not coming out
-	// - spurious warning message for unions
-	// - enumeration coming out with leading comma (addr_discipl_t)
-	// - redundant "aligned(1)" attribute for fields that are on the ABI alignment
-	// - C vs C++ issues: struct tags, "_Bool", etc.
-	// - nameless function typedefs after big_allocation (3805..31e6)
-	
-
-
-
-	/* Just what does "dependency" mean here?
-	 * It means another thing that must be emitted before we can emit the first thing.
-	 * Whether that is true depends on
-	 * (1) how we are doing naming ("OK to inline anonymouses"? 
-	 *        "see through typedefs"? if yes then no dependency on the typedef?
-	 *        + what we have forward-decl'd <-- NO, this just affects emit algo/strategy
-	 *        + should base types be explicitly named/declared as if a typedef
-	 *        + should struct/union/class be tagged
-	 *        
-	 * (2) how we are using the thing (pointer-to-struct? forward-decl is enough;
-	 *        instantiate struct? forward-decl is not enough)
-	 */
-	bool use_friendly_base_type_names = true;
-	referencer namer(*this, use_friendly_base_type_names,
-		spec::opt<string>(), /* use_struct_and_union_prefixes */ true);
-}
-#endif
 } } // end namespace dwarf::tool
