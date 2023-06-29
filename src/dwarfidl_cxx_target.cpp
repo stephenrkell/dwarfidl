@@ -170,6 +170,7 @@ void dwarfidl_cxx_target::transitively_close(
 						/* emit_fp_names = */ true,
 						/* emit_semicolon = */ true
 					);
+					// s << " /* " << the_pair.second.summary() << " */" << endl;
 					output_fragments[the_pair] = s.str(); changed = true;
 				} break;
 				case EMIT_DEF: {
@@ -180,8 +181,10 @@ void dwarfidl_cxx_target::transitively_close(
 						maybe_get_name_tracking_deps,
 						/* override_name = */ opt<string>(),
 						/* emit_fp_names = */ true,
+						/* semicolon */ false,
 						/* body = */ string()
 					);
+					// s << " /* " << the_pair.second.summary() << " */" << endl;
 					output_fragments[the_pair] = s.str(); changed = true;
 				} break;
 				default:

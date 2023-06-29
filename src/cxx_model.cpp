@@ -120,6 +120,7 @@ namespace tool {
 			if (!i) return string("void");
 			/* How do qualified names fit in to this logic? We used to have
 			 * fq_name_parts_for for DIEs that were not immediate children of a CU. */
+			bool do_prefix = (k == DEFINING) || this->use_struct_and_union_prefixes();
 			switch (i.tag_here())
 			{
 				case DW_TAG_base_type:
@@ -131,76 +132,29 @@ namespace tool {
 					return (!!this->prefix_for_all_idents() ? *this->prefix_for_all_idents() : "") + *i.name_here();
 				case DW_TAG_structure_type:
 					if (i.name_here())
-					{ name_prefix = this->use_struct_and_union_prefixes() ? "struct " : ""; goto handle_named_def; }
+					{ name_prefix = do_prefix ? "struct " : ""; goto handle_named_def; }
 					else goto handle_anonymous;
 				case DW_TAG_union_type:
 					if (i.name_here())
-					{ name_prefix = this->use_struct_and_union_prefixes() ? "union " : ""; goto handle_named_def; }
+					{ name_prefix = do_prefix ? "union " : ""; goto handle_named_def; }
 					else goto handle_anonymous;
 				case DW_TAG_class_type:
 					if (i.name_here())
-					{ name_prefix = this->use_struct_and_union_prefixes() ? "class " : ""; goto handle_named_def; }
+					{ name_prefix = do_prefix ? "class " : ""; goto handle_named_def; }
 					else goto handle_anonymous;
 				case DW_TAG_enumeration_type:
 					if (i.name_here())
-					{ name_prefix = this->use_struct_and_union_prefixes() ? "enum " : ""; goto handle_named_def; }
+					{ name_prefix = do_prefix ? "enum " : ""; goto handle_named_def; }
 					else goto handle_anonymous;
 				default:
 					if (i.name_here()) goto handle_named_def;
 					goto handle_anonymous;
-				handle_named_def: {
+				handle_named_def:
 					assert(i.name_here());
-					/* In C code, we can get a problem with tagged namespaces (struct, union, enum) 
-					 * overlapping with member names (and with each other). This causes an error like
-					 * error: declaration of `cake::link_p2k_::kfs::uio_rw cake::link_p2k_::kfs::uio::uio_rw'
-					 * librump.o.hpp:1341:6: error: changes meaning of `uio_rw' from `enum cake::link_p2k_::kfs::uio_rw'
-					 *
-					 * We work around it by using the anonymous DIE name if there is a CU-toplevel 
-					 * decl of this name (HACK: should really be visible file-toplevel).
-					 */
-
-					// FIXME: this conflict check is too client-specific
-					
-					// to make sure we don't get ourselves as "conflicting",
-					// we should check that we're a member_die or other non-CU-level thing
-					auto conflicting_toplevel_die = 
-						(i.parent().tag_here() != DW_TAG_compile_unit) 
-							? i.root().find_visible_grandchild_named(*i.name_here())
-							: iterator_base::END;
-					// if we get a conflict, we shouldn't be conflicting with ourselves
-					assert(!conflicting_toplevel_die || conflicting_toplevel_die != i);
-					if (!conflicting_toplevel_die)
-					{
-						return (!!this->prefix_for_all_idents() ? *this->prefix_for_all_idents() : "") + name_prefix
-						+ this->cxx_name_from_string(*i.name_here());
-					}
-					assert(conflicting_toplevel_die);
-					// this is the conflicting case
-					cerr << "Warning: renaming element " << *i.name_here()
-						<< " child of " << i.parent().summary()
-						<< " because it conflicts with toplevel " << conflicting_toplevel_die.summary()
-						<< endl;
-					goto handle_anonymous;
-				}
-				/* This block means our behaviour is "we can name anything".
-				 * This means conversely that when we are asked to emit things,
-				 * everything comes out with a name, generated if necessary.
-				 * This is why the namer is used in both places: it ensures
-				 * that e.g. if we have 'typedef struct { } blah'
-				 * the inner struct is given a name and enumerated as a dependency
-				 * of the typedef, so the named struct wil lbe emitted first.
-				 * If we returned no name for the struct, it will not be a
-				 * dependency but also will not be treated as a nameable
-				 * reference when emitting the typedef, instead being inlined. */
-				handle_anonymous: {
-					// anonymous or conflicting -- both the same
-					ostringstream s;
-					s << this->get_anonymous_prefix() << hex << i.offset_here();
 					return (!!this->prefix_for_all_idents() ? *this->prefix_for_all_idents() : "") + name_prefix
-						+ s.str();
-					// we never return this
-					// return opt<string>();
-				}
+						+ this->cxx_name_from_string(*i.name_here());
+				handle_anonymous:
+					return opt<string>();
 			}
 		};
 	}
@@ -402,10 +356,16 @@ namespace tool {
 		assert(!t.is_a<typedef_die>()); // and typedefs (ditto)
 		if (t.is_a<with_data_members_die>()
 			|| t.is_a<enumeration_type_die>())
-		{	/* unnamed; caller may want us to emit an "inline
-			 * definition" or to use a generated name */
+		{	/* unnamed and no way to refer to it; only way is to emit an "inline definition" */
 			assert(!t.name_here());
-			abort();
+			indenting_ostream indenting_str(str);
+			indenting_str << defn_of_die(
+				t,
+				maybe_get_name,
+				opt<string>("") /* override_name -- we override it to be empty! */,
+				/* emit_fp_names */ false,
+				/* write_semicolon */ false
+			) << " " << name;
 		}
 		else if (t.is_a<subrange_type_die>())
 		{
@@ -479,6 +439,7 @@ namespace tool {
 			}
 			ctxt << ")";
 			str << decl_having_type(rett, ctxt.str(), maybe_get_name, false);
+			// str << " /* return type is " << rett << " */ ";
 		}
 		else /*including if (t.is_a<string_type_die>()) */
 		{
@@ -494,7 +455,7 @@ namespace tool {
 		iterator_df<program_element_die> d,
 		cxx_generator_from_dwarf::referencer_fn_t maybe_get_name,
 		bool emit_fp_names,
-		bool write_semicolon /* = true */
+		bool write_semicolon /* = false */
 	)
 	{
 		ostringstream out;
@@ -556,18 +517,14 @@ namespace tool {
 		}
 		else if (d.is_a<with_data_members_die>() || d.is_a<enumeration_type_die>())
 		{
-			/* To forward-declare an aggregate type we always use the tag. */
-			string tag_prefix =
-				   (d.tag_here() == DW_TAG_structure_type) ? "struct " :
-				   (d.tag_here() == DW_TAG_union_type) ? "union " :
-				   (d.tag_here() == DW_TAG_class_type) ? "class " :
-				   (d.tag_here() == DW_TAG_enumeration_type) ? "enum " :
-				   ({ assert(false); abort(); ""; });
+			/* FIXME: to forward-declare an aggregate type we always use the tag.
+			 * How can we force maybe_get_name to always include it, or to leave it out?
+			 * For now we rely on that the default is to icnlude it. */
 			/* We can only forward-declare something we're giving a name to. */
 			opt<string> maybe_name = maybe_get_name(d, DEFINING);
 			if (maybe_name)
 			{
-				out << tag_prefix << cxx_name_from_string(*maybe_name) << (write_semicolon ? ";" : "")
+				out << *maybe_name << (write_semicolon ? ";" : "")
 					<< std::endl;
 			}
 			else cerr << "Skipping declaration of unnameable aggregate type " << d  << endl;
@@ -589,7 +546,7 @@ namespace tool {
 		undeclarable:
 			/* It's not possible to declare other types in C++; they are
 			 * just constructed from syntax where needed. */
-			cerr << "Skipping declaration of undeclareable DIE " << d << endl;
+			cerr << "Skipping declaration of undeclareable " << d << endl;
 		}
 		else
 		{
@@ -611,6 +568,7 @@ namespace tool {
 		cxx_generator_from_dwarf::referencer_fn_t maybe_get_name,
 		opt<string> override_name /* = opt<string>() */,
 		bool emit_fp_names /* = true */,
+		bool write_semicolon /* = true */,
 		string body /* = string() */
 	)
 	{
@@ -630,7 +588,7 @@ namespace tool {
 					out.dec_level();
 				}
 				out << std::endl;
-				out << "};" << std::endl;
+				out << "}" << (write_semicolon ? ";" : "") << std::endl;
 			}
 			else if (i_d.is_a<enumerator_die>())
 			{
@@ -643,9 +601,13 @@ namespace tool {
 			else if (i_d.is_a<with_data_members_die>())
 			{
 				auto p_d = i_d.as_a<with_data_members_die>();
-				out << decl_of_die(p_d,
-					maybe_get_name,
-					/* use fp names */ false);
+				// instead of printing the header using decl_of_die,
+				// which will fail for an anonymous struct, we open-code
+				// it here.
+				string name_to_use = (override_name ? *override_name : *maybe_get_name(i_d, DEFINING));
+				if (!use_struct_and_union_prefixes()
+					|| (override_name && *override_name == "")) out << *tag_for_die(p_d) << " ";
+				out << name_to_use;
 				if (!(p_d->get_declaration() && *p_d->get_declaration()))
 				{
 					out << " { " << std::endl;
@@ -666,7 +628,8 @@ namespace tool {
 					auto ms = p_d.children().subseq_of<member_die>();
 					assert(srk31::count(ms.first, ms.second) == 0);
 				}
-				out << ";" << std::endl;
+				if (write_semicolon) out << ";";
+				out << std::endl;
 			}
 			/* variable_die */
 			else if (i_d.is_a<variable_die>())
@@ -749,7 +712,9 @@ namespace tool {
 				 * overlapping with member names (and with each other).
 				 */
 				out << decl_having_type(p_d->find_type(), *maybe_get_name(p_d, DEFINING),
-					maybe_get_name, /* emit fp names */ false);
+					maybe_get_name, /* emit fp names */ false
+					
+					);
 				// FIXME: type must be complete! Need to pass this down!
 				// FIXME: do protect_ident() ! This is a 'name', not a 'reference'
 
@@ -766,7 +731,7 @@ namespace tool {
 
 					if (!(target_offset > 0 && cur_offset != std::numeric_limits<Dwarf_Unsigned>::max()))
 					{
-						out << ";";
+						out <<  (write_semicolon ? ";" : "");
 					}
 					else
 					{
@@ -826,7 +791,8 @@ namespace tool {
 							power = 1;
 						}
 
-						out << " __attribute__((aligned(" << power << ")));";
+						out << " __attribute__((aligned(" << power << ")))"
+							<< (write_semicolon ? ";" : "");
 					}
 
 					out << " // offset: " << target_offset << endl;
@@ -834,7 +800,8 @@ namespace tool {
 				else 
 				{
 					// guess at natural alignment and hope for the best
-					out << "; // no DW_AT_data_member_location, so hope the compiler gets it right" << std::endl;
+					out <<  (write_semicolon ? ";" : "")
+						<< " /* no DW_AT_data_member_location, so hope the compiler gets it right */" << std::endl;
 				}
 			} // end member_die case
 			else
@@ -846,23 +813,63 @@ namespace tool {
 		return self;
 	}
 
-	srk31::indenting_ostream&
-	cxx_generator_from_dwarf::emit_definition(iterator_base i_d,
-		srk31::indenting_ostream& out,
-		cxx_generator_from_dwarf::referencer_fn_t namer)
-	{
-		out << defn_of_die(i_d, namer, /* override_name */ opt<string>(),
-			/* fp names */ true, /* body */ "");
-		return out;
-	}
-
 /* from dwarf::tool::cxx_target */
 	optional<string>
 	cxx_target::name_for_base_type(iterator_df<base_type_die> p_d) const
 	{
-		auto found = base_types.find(base_type(p_d));
-		if (found == base_types.end()) return optional<string>();
-		else return found->second;
+		auto found_seq = base_types.equal_range(base_type(p_d));
+		if (found_seq.first == found_seq.second) return optional<string>();
+		/* PROBLEM: wchar_t and int are indistinguishable in DWARF,
+		 * even though libcxxgen's cxx_compiler puts them in different
+		 * equivalence classes. The base_types logic in libcxxgen does not
+		 * re-group by equivalence class. We could either
+		 * 1. look for the first equivalence class having any member
+		 *    whose name is in the equal_range we have found,
+		 *    and just use the first member of that; or
+		 * 2. if any of the equal_range has a name that matches p_d's,
+		 *   just use that? i.e. it is definitely a name built in to the compiler.
+		 * We use number 1 for now. FIXME: cache the results somewhere in
+		 * libcxxgen, i.e. have it tie its results back to their equivalence classes.
+		 */
+		set< cxx_compiler::equiv_class_ptr_t > seen_equiv_classes;
+		unsigned count = 0;
+		for (auto i_found = found_seq.first; i_found != found_seq.second; ++i_found)
+		{
+			++count;
+			// do we have an equivalence class?
+			auto& name = i_found->second.first;
+			auto& equiv = i_found->second.second;
+			if (equiv) seen_equiv_classes.insert(equiv);
+			if (p_d.name_here() && *p_d.name_here() == name)
+			{
+				return name; // OK to use the name of the incoming DIE; compiler also understands this
+			}
+		}
+#if 0
+		// else just return whatever the compiler knows it as... try to canonicalise by equiv class
+		cerr << "Found " << count << " known base types (across " << seen_equiv_classes.size()
+			<< " name-equivalence classes; first is " << (*seen_equiv_classes.begin())[0]
+			<< ") equivalent to " << p_d << std::endl;
+#endif
+		if (seen_equiv_classes.size() == 0)
+		{
+			cerr << "Fishy: saw no base type equivalence classes for " << p_d << std::endl;
+			goto last_gasp;
+		}
+		else if (seen_equiv_classes.size() > 1)
+		{
+			cerr << "Slightly fishy: saw multiple base type equivalence classes for " << p_d << ": ";
+			for (auto i_equiv = seen_equiv_classes.begin();
+				i_equiv != seen_equiv_classes.end(); ++i_equiv)
+			{
+				if (i_equiv != seen_equiv_classes.begin()) cerr << ", ";
+				cerr << (*i_equiv)[0];
+			}
+			cerr << endl;
+		}
+		return string((*seen_equiv_classes.begin())[0]);
+	last_gasp:
+		return found_seq.first->second.first;
 	}
 
 	const vector<string> cxx_generator::cxx_reserved_words = {
