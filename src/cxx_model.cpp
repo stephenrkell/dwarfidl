@@ -117,16 +117,16 @@ namespace tool {
 		return [this](iterator_base i, enum ref_kind k) -> opt<string> {
 			string name_prefix;
 			// the null DIE reference does represent something: type void
-			if (!i) return string("void");
+			if (!i) return /*string("void")*/ opt<string>();
 			/* How do qualified names fit in to this logic? We used to have
 			 * fq_name_parts_for for DIEs that were not immediate children of a CU. */
 			bool do_prefix = (k == DEFINING) || this->use_struct_and_union_prefixes();
 			switch (i.tag_here())
 			{
 				case DW_TAG_base_type:
-					// return the friendly compiler-determined name or not, depending on argument
-					if (this->use_friendly_base_type_names())
-					{ return *this->name_for_base_type(i.as_a<base_type_die>()); }
+					// If our config is to use the friendly compiler-determined builtin name like "int",
+					// that does not count as a name we are expected to generate.
+					if (this->use_friendly_base_type_names()) return opt<string>();
 					goto handle_named_def;
 				case DW_TAG_typedef:
 					return (!!this->prefix_for_all_idents() ? *this->prefix_for_all_idents() : "") + *i.name_here();
@@ -350,10 +350,13 @@ namespace tool {
 			 * of the subprogram's type, we need to force the expansion of that
 			 * declaration. */ // FIXME: this seems gash
 		}
-		else if (maybe_get_name(t, NORMAL)) { str << *maybe_get_name(t, NORMAL) << " " << name; goto out; }
-		assert(!!t); // namer has handled void
-		assert(!t.is_a<base_type_die>()); // ... and base types (must have name)
-		assert(!t.is_a<typedef_die>()); // and typedefs (ditto)
+		else if (!t) { str << "void " << name; goto out; }
+		else if (t.is_a<base_type_die>() && this->use_friendly_base_type_names())
+		{ str << *this->name_for_base_type(t.as_a<base_type_die>()) << " " << name; goto out; }
+		else if (maybe_get_name(t, NORMAL))
+		{ str << *maybe_get_name(t, NORMAL) << " " << name; goto out; }
+		assert(!t.is_a<base_type_die>()); // either we or namer has handled base types (must have name)
+		assert(!t.is_a<typedef_die>()); // and namer has handled typedefs (ditto)
 		if (t.is_a<with_data_members_die>()
 			|| t.is_a<enumeration_type_die>())
 		{	/* unnamed and no way to refer to it; only way is to emit an "inline definition" */
@@ -370,7 +373,10 @@ namespace tool {
 		else if (t.is_a<subrange_type_die>())
 		{
 			// to declare a thing as of subrange type, just declare it as of the full type
-			str << *maybe_get_name(t.as_a<subrange_type_die>()->get_type(), NORMAL) << " " << name;
+			str << decl_having_type(t.as_a<subrange_type_die>()->get_type(),
+				name,
+				maybe_get_name,
+				emit_fp_names);
 		}
 		else if (t.is_a<address_holding_type_die>())
 		{
@@ -459,7 +465,8 @@ namespace tool {
 	)
 	{
 		ostringstream out;
-		if (!d) goto undeclarable;
+		if (!d) goto undeclarable; // void type is undeclarable
+		out << "/* decl'ing " << d << " */" << endl;
 		if (d.is_a<variable_die>())
 		{
 			out << "extern " << decl_having_type(
@@ -531,10 +538,10 @@ namespace tool {
 		}
 		else if (d.is_a<typedef_die>())
 		{
-			/* What does this mean? A decl of a typedef is the same as
-			 * the def of a typedef. But we don't want duplicates. So
-			 * perhaps we should never generate dependencies on the def
-			 * of a typedef. So decl is where we really output it. */
+			/* What does this mean? typedefs only have decls, not defs.
+			 * We decree this in order to avoid duplicates. We never
+			 * generate dependencies on the def of a typedef. The decl
+			 * is the only thing we output. */
 			out << "typedef " << decl_having_type(
 				d.as_a<typedef_die>()->find_type(),
 				cxx_name_from_string(*d.name_here()), // <-- how do we pick names to use for definitions?
@@ -552,7 +559,7 @@ namespace tool {
 		{
 			abort(); // not sure what hits this case
 		}
-		return out.str();;
+		return out.str();
 	}
 
 	/* Why is this a manipulator, not just a string-returner?
@@ -574,6 +581,7 @@ namespace tool {
 	{
 		cxx_generator_from_dwarf::strmanip_t self;
 		self = [=](indenting_ostream& out) -> indenting_ostream& {
+			out << "/* def'ing " << i_d << " */" << endl;
 			if (i_d.is_a<enumeration_type_die>())
 			{
 				out << "enum " 
@@ -605,6 +613,11 @@ namespace tool {
 				// which will fail for an anonymous struct, we open-code
 				// it here.
 				string name_to_use = (override_name ? *override_name : *maybe_get_name(i_d, DEFINING));
+				/* If we're not generating the struct/union/... tag prefix in the name,
+				 * we need to generate it here. Similarly if we're given a name that is
+				 * empty, it means that we're generating an anonymous inline definition
+				 * and we need to use the keyword to introduce it, e.g. "struct" etc,
+				 * regardless of whether we can refer to nameful structs without 'struct'. */
 				if (!use_struct_and_union_prefixes()
 					|| (override_name && *override_name == "")) out << *tag_for_die(p_d) << " ";
 				out << name_to_use;
@@ -800,8 +813,11 @@ namespace tool {
 				else 
 				{
 					// guess at natural alignment and hope for the best
-					out <<  (write_semicolon ? ";" : "")
-						<< " /* no DW_AT_data_member_location, so hope the compiler gets it right */" << std::endl;
+					out <<  (write_semicolon ? ";" : "");
+					if (!i.is_a<union_type_die>())
+					{
+						out << " /* no DW_AT_data_member_location, so hope the compiler gets it right */" << std::endl;
+					}
 				}
 			} // end member_die case
 			else

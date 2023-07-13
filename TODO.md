@@ -1,3 +1,80 @@
+# bugs in C++ generation
+
+* bool versus _Bool
+
+# noopgen completion
+
+* supplying a body
+* supplying attributes
+
+# Library cleanup
+
+Most of libdwarfidl actually has nothing to do with the dwarfidl language.
+The following files should be excised. This could be by a hg repo-slicing
+operation, perhaps... need to check how that goes.
+
+cxx_model.cpp -- refactor s.t. we have
+ * cxx_generator
+ * template<class Model> cxx_generator_from_model
+ * cxx_generator_from_dwarf : public cxx_generator_from_model<DwarfModel>
+
+... the latter conceptually taking most code from dwarfidl_cxx_target.cpp,
+although write_ordered_output and transitively_close can probably be pulled up
+to the templated superclass.
+
+DONE: deduplicate code ("emit_model" vs "cxx_decl_from_type_die" vs "make_declaration_of_type")
+                               -- open dispatch on tag seems nice but really is overkill
+
+then move cxx_generator and cxx_generator_from_model to libcxxgen
+* cxx_model was originally in libdwarfpp! until 2013
+* libcxxgen (already uses DWARF but) should only have utility code,
+    e.g. maybe the thing that prints declarators, not
+    tool-building code
+
+then reconsider dwarf_interface_walk.cpp -- can eliminate? move to libdwarfpp? rename as slice-interface?
+    gather_interface_dies which is one possible "slicer" -- seems redundant? who else uses it?
+
+Emitters can already take different approaches to naming
+    e.g. of anonymous DIEs, or prefixing names, or...
+
+Things we have:
+
+ - emitting a C++ declaration modelling a DWARF-described entity
+ - emitting a C++ *definition* modelling a DWARF-described entity
+      (for stuff existing at run time: variables, subprograms, anything else?)
+      (what about for struct types etc? the forward-decl vs full decl are not
+        quite the same distinction as for decl-vs-def of functions etc.)
+
+ - generating names for anonymous DIEs -- utility
+ - extracting an 'interface', i.e. a collection of DIEs, from a bigger collection of DIEs
+    -- it's not really an interface! it's just a dependency subgraph,
+       i.e. a coherent "slice"
+        -- "declaration slice" would be different from "implementation slice",
+            it if ever makes sense to output code for internals e.g. .local variables
+        ** rename 'dwarf_interface_walk' 'dwarf_interface_slice'?
+           factor out a generic 'slice' helper(s)?
+           This is possibly just a transitive closure operation
+            plus an "immediate dependencies" notion
+            ... where this "dependency" notion is the essence of the slicer
+                    e.g. if a struct type is never instantiated in the interface,
+                         it can be left a forward-decl and its members need not be
+                         included. So following an edge needs to come with the "sense"
+                         of the follow.
+            When we do DWARF-slicing, we should remember the edges
+            so we can topsort later. The edges define a graph.
+                ** I used to have this working with BGL!
+ - outputting a whole C++ model, i.e. set of declarations,
+    of a DWARF interface, defined by a collection of DIEs,
+    using a particular approach to naming/referencing anonymous DIEs
+        -- i.e. we use synthetic names aggressively, rather than
+              using some kind of topsorting / containment analysis
+              to reproduce exactly what was written e.g. in the case of
+                   typedef struct { ... } blah_t;
+    ACTUALLY
+        noopgen emits an "implementation model"
+        dwarfhpp emits an "interface model"
+
+
 # Merge grammars
 
 The dwarfidl language has a complicated history, and remains something

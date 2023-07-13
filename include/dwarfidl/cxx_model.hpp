@@ -154,24 +154,7 @@ public:
 	);
 
 	string 
-	create_ident_for_anonymous_die(
-		iterator_df<basic_die> p_d
-	);
-
-	string 
 	protect_ident(const string& ident);
-
-protected:
-	virtual 
-	iterator_df<type_die>
-	transform_type(
-		iterator_df<type_die> t,
-		const iterator_base& context
-	)
-	{
-		return t;
-	}
-
 };
 
 /** This class supports generation of C++ code targetting a particular C++ compiler

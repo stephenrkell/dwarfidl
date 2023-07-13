@@ -51,16 +51,29 @@ public:
 		EMIT_DEF
 	};
 
+	//typedef std::less< pair<emit_kind, iterator_base> > compare_with_type_equality;
+	struct compare_with_type_equality
+	{
+		bool operator()(const pair<emit_kind, iterator_base>& p1,
+		                const pair<emit_kind, iterator_base>& p2) const
+		{
+			if (p1.first < p2.first) return true;
+			if (p1.first > p2.first) return false;
+			// from here, we know the 'first's are equal
+			return iterator_base::less_by_type_equality()(p1.second, p2.second);
+		}
+	};
+
 	void transitively_close(
-		set<pair<emit_kind, iterator_base> > const& to_output,
+		set<pair<emit_kind, iterator_base>, compare_with_type_equality > const& to_output,
 		cxx_generator_from_dwarf::referencer_fn_t r,
-		map<pair<emit_kind, iterator_base>, string >& output_fragments,
-		multimap< pair<emit_kind, iterator_base>, pair<emit_kind, iterator_base> >& order_constraints
+		map<pair<emit_kind, iterator_base>, string, compare_with_type_equality >& output_fragments,
+		multimap< pair<emit_kind, iterator_base>, pair<emit_kind, iterator_base>, compare_with_type_equality >& order_constraints
 	);
 
 	void write_ordered_output(
-		map<pair<emit_kind, iterator_base>, string > output_fragments,
-		multimap< pair<emit_kind, iterator_base>, pair<emit_kind, iterator_base> >& order_constraints
+		map<pair<emit_kind, iterator_base>, string, compare_with_type_equality > output_fragments,
+		multimap< pair<emit_kind, iterator_base>, pair<emit_kind, iterator_base>, compare_with_type_equality >& order_constraints
 	);
 };
 
