@@ -52,6 +52,27 @@ static std::ostream& debug(int msg_level = 1)
 
 namespace dwarf { namespace tool {
 
+/* FIXME: this mixes together the task of generating snippets of code
+ * with the core task of elaborating a dependency graph. These are really coroutines in
+ * a sense: generating a snippet will generate outgoing references, and
+ * these in turn need to be generated, and so on.
+ *
+ * It also bothers me that we are passing the namer around rather than just
+ * using an overridden virtual function. Can we make the worklist and expanded output list
+ * object-level state, of a subclass transitively_closing_dwarfidl_cxx_target or similar?
+ * Does this help with unbundling the two coroutines? Rather than the caller passing in
+ * the maps of output fragments and ordering constraints, they would pull these out
+ * at the end.
+ *
+ * This is a good idea because e.g. noopgen can override defn_of_die to output the body
+ * that it wants to generate. The current practice of passing a 'body' string does not
+ * work. OK, fixed by adding a virtual member function that generate
+ *
+ * In what way is this target a 'dwarfidl' target? It's not, except that it resides
+ * in libdwarfidl. Could it even go in libcxxgen, maybe with the fragment generator pure-virtual?
+ * Yes, and the dependency tracking could be lifted up to be DWARF-agnostic level,
+ * just like the mooted cxx_generator_from_model<DwarfModel>. However, this is too much for now.
+ */
 void dwarfidl_cxx_target::transitively_close(
 	set<std::pair<dwarfidl_cxx_target::emit_kind, iterator_base>, dwarfidl_cxx_target::compare_with_type_equality > const& to_output,
 	cxx_generator_from_dwarf::referencer_fn_t maybe_get_name,
@@ -117,7 +138,8 @@ void dwarfidl_cxx_target::transitively_close(
 		auto new_ent = make_pair(from, to);
 		/* Here we insert while suppressing duplicates.
 		 * Care: the range over which the key is equal is wider than the range over
-		 * which the value is equal. */
+		 * which the value is equal... can't assume values are all the same, so
+		 * to suppress duplicate values we may have to look at the whole key-equal range. */
 		auto key_equal_range = order_constraints.equal_range(from);
 		for (auto i_r = key_equal_range.first; i_r != key_equal_range.second; ++i_r)
 		{
@@ -207,8 +229,7 @@ void dwarfidl_cxx_target::transitively_close(
 						maybe_get_name_tracking_deps,
 						/* override_name = */ opt<string>(),
 						/* emit_fp_names = */ true,
-						/* semicolon */ false,
-						/* body = */ string()
+						/* semicolon */ false
 					);
 					// s << " /* " << the_pair.second.summary() << " */" << endl;
 					output_fragments[the_pair] = s.str();

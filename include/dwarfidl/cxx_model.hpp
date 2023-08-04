@@ -65,6 +65,9 @@ public:
 	// FIXME: overlaps with namer/referencer; eliminate?
 	virtual string cxx_name_from_string(const string& s) const;
 	virtual string name_from_name_parts(const vector<string>& parts) const;
+	/* Get any identifier prefix that we can assume will not collide with anything
+	 * in the preprocessing/compilation context of the generated code... e.g. "_dwarfhpp_" */
+	virtual string get_reserved_prefix() const = 0;
 };
 
 /** This class implements a mapping from DWARF constructs to C++ constructs,
@@ -74,7 +77,7 @@ class cxx_generator_from_dwarf : public cxx_generator
 {
 protected:
 	virtual string get_anonymous_prefix() const
-	{ return "_dwarfhpp_anon_"; } // HACK: remove hard-coding of this in libdwarfpp, dwarfhpp and cake
+	{ return get_reserved_prefix() + "anon_"; }
 	virtual string get_untyped_argument_typename() const = 0;
 
 public:
@@ -111,9 +114,6 @@ public:
 	cxx_type_can_be_qualified(iterator_df<type_die> p_d) const;
 
 	bool 
-	cxx_type_can_have_name(iterator_df<type_die> p_d) const;
-
-	bool 
 	cxx_assignable_from(
 		iterator_df<type_die> dest,
 		iterator_df<type_die> source
@@ -122,19 +122,15 @@ public:
 	bool 
 	cxx_is_complete_type(iterator_df<type_die> t);
 
-	string 
-	name_for_argument(
-		iterator_df<formal_parameter_die> p_d, 
-		int argnum);
-
-	string
+	virtual string
 	decl_having_type(
 		iterator_df<type_die> t,
 		const string& name,
 		referencer_fn_t r,
 		bool emit_fp_names = true
 	);
-	string
+
+	virtual string
 	decl_of_die(
 		iterator_df<core::program_element_die> d,
 		referencer_fn_t r,
@@ -142,15 +138,24 @@ public:
 		bool write_semicolon = false
 	);
 
+	virtual opt<string>
+	default_expression_of_type(
+		iterator_df<type_die> t,
+		referencer_fn_t r
+	);
+
 	/* We package some of our functionality as stream manipulators. */
 	typedef std::function< indenting_ostream&( indenting_ostream& ) > strmanip_t;
-	strmanip_t defn_of_die(
+	virtual strmanip_t defn_of_die(
 		iterator_df<core::program_element_die> i_d,
 		referencer_fn_t r,
 		opt<string> override_name = opt<string>(),
 		bool emit_fp_names = true,
-		bool write_semicolon = true,
-		string body = string()
+		bool write_semicolon = true
+	);
+	virtual strmanip_t body_of_subprogram_die(
+		iterator_df<core::subprogram_die> i_d,
+		referencer_fn_t r
 	);
 
 	string 

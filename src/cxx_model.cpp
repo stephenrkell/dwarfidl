@@ -34,12 +34,12 @@ namespace tool {
 	string 
 	cxx_generator::cxx_name_from_string(const string& s) const
 	{
-		const char prefix[] = "_dwarfhpp_"; // FIXME: init from pure virtual function, cache in obj?
 		if (is_reserved(s)) 
 		{
-			cerr << "Warning: generated C++ name `" << (prefix + s) 
+			string gen = get_reserved_prefix() + s;
+			cerr << "Warning: generated C++ name `" << gen
 				<< " from reserved word " << s << endl;
-			return prefix + s; // being reserved implies s is lexically okay
+			return gen; // being reserved implies s is lexically okay
 		}
 		else if (is_valid_cxx_ident(s)) return s;
 		else // something is lexically illegal about s
@@ -103,24 +103,19 @@ namespace tool {
 		);
 	}
 
-	bool cxx_generator_from_dwarf::cxx_type_can_have_name(iterator_df<type_die> p_d) const
-	{
-		/* In C++, introducing a name to a modified type requires typedef. */
-		if (p_d.tag_here() == DW_TAG_typedef) return true;
-		else if (p_d.is_a<type_chain_die>()) return false;
-		else return true;
-	}
-
 	cxx_generator_from_dwarf::referencer_fn_t
 	cxx_generator_from_dwarf::get_default_referencer() const
 	{
 		return [this](iterator_base i, enum ref_kind k) -> opt<string> {
-			string name_prefix;
 			// the null DIE reference does represent something: type void
 			if (!i) return /*string("void")*/ opt<string>();
 			/* How do qualified names fit in to this logic? We used to have
-			 * fq_name_parts_for for DIEs that were not immediate children of a CU. */
-			bool do_prefix = (k == DEFINING) || this->use_struct_and_union_prefixes();
+			 * fq_name_parts_for for DIEs that were not immediate children of a CU.
+			 * FIXME: reinstate logic that can handle this. */
+			bool add_tag_prefix = (k == DEFINING) || this->use_struct_and_union_prefixes();
+			string tag_prefix;
+			string prefix_always = !!this->prefix_for_all_idents()
+				? *this->prefix_for_all_idents() : "";
 			switch (i.tag_here())
 			{
 				case DW_TAG_base_type:
@@ -129,34 +124,51 @@ namespace tool {
 					if (this->use_friendly_base_type_names()) return opt<string>();
 					goto handle_named_def;
 				case DW_TAG_typedef:
-					return (!!this->prefix_for_all_idents() ? *this->prefix_for_all_idents() : "") + *i.name_here();
+					return prefix_always + *i.name_here();
 				case DW_TAG_structure_type:
 					if (i.name_here())
-					{ name_prefix = do_prefix ? "struct " : ""; goto handle_named_def; }
+					{ tag_prefix = "struct "; goto handle_named_def; }
 					else goto handle_anonymous;
 				case DW_TAG_union_type:
 					if (i.name_here())
-					{ name_prefix = do_prefix ? "union " : ""; goto handle_named_def; }
+					{ tag_prefix = "union "; goto handle_named_def; }
 					else goto handle_anonymous;
 				case DW_TAG_class_type:
 					if (i.name_here())
-					{ name_prefix = do_prefix ? "class " : ""; goto handle_named_def; }
+					{ tag_prefix = "class "; goto handle_named_def; }
 					else goto handle_anonymous;
 				case DW_TAG_enumeration_type:
 					if (i.name_here())
-					{ name_prefix = do_prefix ? "enum " : ""; goto handle_named_def; }
+					{ tag_prefix = "enum "; goto handle_named_def; }
 					else goto handle_anonymous;
 				default:
 					if (i.name_here()) goto handle_named_def;
 					goto handle_anonymous;
 				handle_named_def:
 					assert(i.name_here());
-					return (!!this->prefix_for_all_idents() ? *this->prefix_for_all_idents() : "") + name_prefix
+					return (add_tag_prefix ? tag_prefix : string(""))
+						+ prefix_always
 						+ this->cxx_name_from_string(*i.name_here());
 				handle_anonymous:
 					return opt<string>();
 			}
 		};
+	}
+
+	opt<string>
+	cxx_generator_from_dwarf::default_expression_of_type(
+		iterator_df<type_die> t,
+		referencer_fn_t maybe_get_name
+	)
+	{
+		if (t.is_a<base_type_die>() || t.is_a<enumeration_type_die>()) return string("0");
+		if (t.is_a<pointer_type_die>()) return string("nullptr");
+		if (t.is_a<with_data_members_die>())
+		{
+			auto name = maybe_get_name(t, ref_kind::NORMAL);
+			if (name) return *name + "()";
+		}
+		return opt<string>();
 	}
 
 	bool 
@@ -272,20 +284,6 @@ namespace tool {
 		return true;
 	}
 
-	string 
-	cxx_generator_from_dwarf::name_for_argument(
-		iterator_df<formal_parameter_die> p_d, 
-		int argnum
-	)
-	{
-		std::ostringstream s;
-		//std::cerr << "called name_for_argument on argument position " << argnum << ", ";
-		if (p_d.name_here()) { /*std::cerr << "named ";*/ s << "_dwarfhpp_arg_" << *p_d.name_here(); /*std::cerr << *d.get_name();*/ }
-		else { /*std::cerr << "anonymous";*/ s << "_dwarfhpp_anon_arg_" << argnum; }
-		//std::cerr << std::endl;
-		return s.str();
-	} 
-
 	string
 	cxx_generator_from_dwarf::protect_ident(const string& ident)
 	{
@@ -301,10 +299,11 @@ namespace tool {
 		if (ident.find("__") == 0 && ident == boost::to_upper_copy(ident))
 		{
 			s << std::endl << "#if defined(" << ident << ")" << std::endl
-				<< "_dwarfhpp_protect_" << ident << std::endl
+				<< get_reserved_prefix() << "protect_" << ident << std::endl
 				<< "#else" << std::endl
 				<< ident << std::endl
-				<< "#define _dwarfhpp_protect_" << ident << " " << ident << std::endl
+				<< "#define " << get_reserved_prefix () << "protect_" << ident << " "
+					<< ident << std::endl
 				<< "#endif" << std::endl;
 		}
 		else s << ident;
@@ -314,7 +313,8 @@ namespace tool {
 	string
 	cxx_generator_from_dwarf::decl_having_type(
 		iterator_df<type_die> t,
-		const string& name,
+		const string& name, // <-- this is not really just a "name" -- recursive calls accumulate
+		                    // declarator syntax in this string
 		cxx_generator_from_dwarf::referencer_fn_t maybe_get_name,
 		bool emit_fp_names
 	)
@@ -562,9 +562,28 @@ namespace tool {
 		return out.str();
 	}
 
+	cxx_generator_from_dwarf::strmanip_t cxx_generator_from_dwarf::body_of_subprogram_die(
+		iterator_df<subprogram_die> i_d,
+		cxx_generator_from_dwarf::referencer_fn_t maybe_get_name
+	)
+	{
+		cxx_generator_from_dwarf::strmanip_t self;
+		self = [=](indenting_ostream& out) -> indenting_ostream& {
+			auto ret_t = i_d->get_return_type();
+			if (ret_t && ret_t->get_concrete_type())
+			{
+				opt<string> maybe_str = default_expression_of_type(ret_t->get_concrete_type(),
+					maybe_get_name);
+				assert(maybe_str && "can generate default expression for return type");
+				out << "return " << *maybe_str << ";" << endl;
+			}
+			return out;
+		};
+		return self;
+	}
 	/* Why is this a manipulator, not just a string-returner?
 	 * It's so that we can call other stuff on the stream, like inc_level()
-	 * and dec_level(). If we output a whole collection of DIEs in this way,
+	 * and dec_level(). FIXME: if we output a whole collection of DIEs in this way,
 	 * this is fine. But our usage model involves outputting snippets
 	 * (as strings?) which we then emit in a topsorted order. That means
 	 * the tabbing won't necessarily be right. At a minimum, to start a new
@@ -575,8 +594,7 @@ namespace tool {
 		cxx_generator_from_dwarf::referencer_fn_t maybe_get_name,
 		opt<string> override_name /* = opt<string>() */,
 		bool emit_fp_names /* = true */,
-		bool write_semicolon /* = true */,
-		string body /* = string() */
+		bool write_semicolon /* = true */
 	)
 	{
 		cxx_generator_from_dwarf::strmanip_t self;
@@ -655,7 +673,8 @@ namespace tool {
 				out << decl_having_type(i_d, *i_d.name_here(), maybe_get_name, true) << endl
 					<< "{" << endl;
 				out.inc_level();
-				out << body;
+				out << this->body_of_subprogram_die(i_d.as_a<subprogram_die>(),
+					maybe_get_name);
 				out.dec_level();
 				out << "}" << endl;
 			}
@@ -794,7 +813,7 @@ namespace tool {
 								<< target_offset << " starting at " << cur_offset << endl;
 							if (target_offset - cur_offset < MAXIMUM_SANE_OFFSET)
 							{
-								out << "char " << "_dwarfhpp_anon_" << hex << p_d.offset_here()
+								out << "char " << get_anonymous_prefix() << hex << p_d.offset_here()
 									<< "_padding[" << target_offset - cur_offset << "];" << endl;
 							}
 							else

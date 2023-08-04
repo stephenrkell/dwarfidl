@@ -68,6 +68,7 @@ int main(int argc, char **argv)
 	struct dwarfhpp_cxx_target : dwarfidl_cxx_target
 	{
 		using dwarfidl_cxx_target::dwarfidl_cxx_target;
+		virtual string get_reserved_prefix() const { return "_dwarfhpp_"; }
 		referencer_fn_t get_default_referencer() const
 		{
 			auto default_referencer = this->dwarfidl_cxx_target::get_default_referencer();

@@ -1,6 +1,9 @@
 # bugs in C++ generation
 
 * bool versus _Bool
+* noopgen: supply a body
+* wchar_t?
+* bitfields
 
 # noopgen completion
 
@@ -9,9 +12,10 @@
 
 # Library cleanup
 
+Make the naming function a virtual member function.
+
 Most of libdwarfidl actually has nothing to do with the dwarfidl language.
-The following files should be excised. This could be by a hg repo-slicing
-operation, perhaps... need to check how that goes.
+The following files should be excised
 
 cxx_model.cpp -- refactor s.t. we have
  * cxx_generator
@@ -30,6 +34,9 @@ then move cxx_generator and cxx_generator_from_model to libcxxgen
 * libcxxgen (already uses DWARF but) should only have utility code,
     e.g. maybe the thing that prints declarators, not
     tool-building code
+
+This could be by a hg repo-slicing
+operation, perhaps... need to check how that goes.
 
 then reconsider dwarf_interface_walk.cpp -- can eliminate? move to libdwarfpp? rename as slice-interface?
     gather_interface_dies which is one possible "slicer" -- seems redundant? who else uses it?
