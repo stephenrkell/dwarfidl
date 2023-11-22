@@ -9,7 +9,7 @@
 #include <boost/algorithm/string.hpp>
 #include <srk31/indenting_ostream.hpp>
 #include "dwarfidl/cxx_model.hpp"
-#include "dwarfidl/dwarfidl_cxx_target.hpp"
+#include "dwarfidl/dependency_ordering_cxx_target.hpp"
 #include "dwarfidl/dwarf_interface_walk.hpp"
 #include <srk31/algorithm.hpp>
 
@@ -41,7 +41,7 @@ using dwarf::tool::gather_interface_dies;
 
 int main(int argc, char **argv)
 {
-	using dwarf::tool::dwarfidl_cxx_target;
+	using dwarf::tool::dependency_ordering_cxx_target;
 
 	// open the file passed in on the command-line
 	assert(argc > 1);
@@ -65,70 +65,68 @@ int main(int argc, char **argv)
 	compiler_argv.push_back("-fno-eliminate-unused-debug-types");
 	compiler_argv.push_back("-fno-eliminate-unused-debug-symbols");
 	
-	struct dwarfhpp_cxx_target : dwarfidl_cxx_target
+	struct dwarfhpp_cxx_target : dependency_ordering_cxx_target
 	{
-		using dwarfidl_cxx_target::dwarfidl_cxx_target;
+		using dependency_ordering_cxx_target::dependency_ordering_cxx_target;
 		virtual string get_reserved_prefix() const { return "_dwarfhpp_"; }
-		referencer_fn_t get_default_referencer() const
+		spec::opt<string> maybe_get_name(iterator_base i, enum ref_kind k)
 		{
-			auto default_referencer = this->dwarfidl_cxx_target::get_default_referencer();
-			return [&](iterator_base i, enum ref_kind k) -> spec::opt<string> {
-				auto default_response = default_referencer(i, k);
-				/* First we do a check for conflict */
-				if (default_response)
-				{
-					assert(i.name_here());
-					/* In C code, we can get a problem with tagged namespaces (struct, union, enum) 
-					 * overlapping with member names (and with each other). This causes an error like
-					 * error: declaration of `cake::link_p2k_::kfs::uio_rw cake::link_p2k_::kfs::uio::uio_rw'
-					 * librump.o.hpp:1341:6: error: changes meaning of `uio_rw' from `enum cake::link_p2k_::kfs::uio_rw'
-					 *
-					 * We work around it by using the anonymous DIE name if there is a CU-toplevel 
-					 * decl of this name (HACK: should really be visible file-toplevel).
-					 */
+			auto default_response = this->dependency_ordering_cxx_target::maybe_get_name(i, k);
+			/* First we do a check for conflict */
+			if (default_response)
+			{
+				assert(i.name_here());
+				/* In C code, we can get a problem with tagged namespaces (struct, union, enum) 
+				 * overlapping with member names (and with each other). This causes an error like
+				 * error: declaration of `cake::link_p2k_::kfs::uio_rw cake::link_p2k_::kfs::uio::uio_rw'
+				 * librump.o.hpp:1341:6: error: changes meaning of `uio_rw' from `enum cake::link_p2k_::kfs::uio_rw'
+				 *
+				 * We work around it by using the anonymous DIE name if there is a CU-toplevel 
+				 * decl of this name (HACK: should really be visible file-toplevel).
+				 */
 
-					// to make sure we don't get ourselves as "conflicting",
-					// we should check that we're a member_die or other non-CU-level thing
-					auto conflicting_toplevel_die = 
-						(i.parent().tag_here() != DW_TAG_compile_unit) 
-							? i.root().find_visible_grandchild_named(*i.name_here())
-							: iterator_base::END;
-					// if we get a conflict, we shouldn't be conflicting with ourselves
-					assert(!conflicting_toplevel_die || conflicting_toplevel_die != i);
-					if (!conflicting_toplevel_die)
-					{
-						return (!!this->prefix_for_all_idents() ? *this->prefix_for_all_idents() : "")
-						+ /* FIXME: add back 'struct'/'union'/... */ /* name_prefix*/ ""
-						+ this->cxx_name_from_string(*i.name_here());
-					}
-					assert(conflicting_toplevel_die);
-					// this is the conflicting case
-					cerr << "Warning: renaming element " << *i.name_here()
-						<< " child of " << i.parent().summary()
-						<< " because it conflicts with toplevel " << conflicting_toplevel_die.summary()
-						<< endl;
-					// fall through...
-				}
-				/* Our behaviour is "we can name anything".
-				 * This means conversely that when we are asked to emit things,
-				 * everything comes out with a name, generated if necessary.
-				 * This is why the namer is used in both places: it ensures
-				 * that e.g. if we have 'typedef struct { } blah'
-				 * the inner struct is given a name and enumerated as a dependency
-				 * of the typedef, so the named struct wil lbe emitted first.
-				 * If we returned no name for the struct, it will not be a
-				 * dependency but also will not be treated as a nameable
-				 * reference when emitting the typedef, instead being inlined. */
-				// anonymous or conflicting -- both the same
-				ostringstream s;
-				s << this->get_anonymous_prefix() << hex << i.offset_here();
-				return (!!this->prefix_for_all_idents() ? *this->prefix_for_all_idents() : "")
+				// to make sure we don't get ourselves as "conflicting",
+				// we should check that we're a member_die or other non-CU-level thing
+				auto conflicting_toplevel_die = 
+					(i.parent().tag_here() != DW_TAG_compile_unit) 
+						? i.root().find_visible_grandchild_named(*i.name_here())
+						: iterator_base::END;
+				// if we get a conflict, we shouldn't be conflicting with ourselves
+				assert(!conflicting_toplevel_die || conflicting_toplevel_die != i);
+				if (!conflicting_toplevel_die)
+				{
+					return (!!this->prefix_for_all_idents() ? *this->prefix_for_all_idents() : "")
 					+ /* FIXME: add back 'struct'/'union'/... */ /* name_prefix*/ ""
-					+ s.str();
-			}; // end lambbda
-		} // end get_default_referencer
+					+ this->cxx_name_from_string(*i.name_here());
+				}
+				assert(conflicting_toplevel_die);
+				// this is the conflicting case
+				cerr << "Warning: renaming element " << *i.name_here()
+					<< " child of " << i.parent().summary()
+					<< " because it conflicts with toplevel " << conflicting_toplevel_die.summary()
+					<< endl;
+				// fall through...
+			}
+			/* Our behaviour is "we can name anything".
+			 * This means conversely that when we are asked to emit things,
+			 * everything comes out with a name, generated if necessary.
+			 * This is why the namer is used in both places: it ensures
+			 * that e.g. if we have 'typedef struct { } blah'
+			 * the inner struct is given a name and enumerated as a dependency
+			 * of the typedef, so the named struct wil lbe emitted first.
+			 * If we returned no name for the struct, it will not be a
+			 * dependency but also will not be treated as a nameable
+			 * reference when emitting the typedef, instead being inlined. */
+			// anonymous or conflicting -- both the same
+			ostringstream s;
+			s << this->get_anonymous_prefix() << hex << i.offset_here();
+			return (!!this->prefix_for_all_idents() ? *this->prefix_for_all_idents() : "")
+				+ /* FIXME: add back 'struct'/'union'/... */ /* name_prefix*/ ""
+				+ s.str();
+		} // end maybe_get_name
 	} target(" ::cake::unspecified_wordsize_type", // HACK: Cake-specific
-		s, compiler_argv);
+		s, set<pair<dependency_ordering_cxx_target::emit_kind, iterator_base>, dependency_ordering_cxx_target::compare_with_type_equality >(),
+		compiler_argv);
 	
 	/* If the user gives us a list of function names on stdin, we use that. */
 	using std::cin;

@@ -103,69 +103,71 @@ namespace tool {
 		);
 	}
 
-	cxx_generator_from_dwarf::referencer_fn_t
-	cxx_generator_from_dwarf::get_default_referencer() const
+	opt<string> cxx_generator_from_dwarf::maybe_get_name(iterator_base i, enum ref_kind k)
 	{
-		return [this](iterator_base i, enum ref_kind k) -> opt<string> {
-			// the null DIE reference does represent something: type void
-			if (!i) return /*string("void")*/ opt<string>();
-			/* How do qualified names fit in to this logic? We used to have
-			 * fq_name_parts_for for DIEs that were not immediate children of a CU.
-			 * FIXME: reinstate logic that can handle this. */
-			bool add_tag_prefix = (k == DEFINING) || this->use_struct_and_union_prefixes();
-			string tag_prefix;
-			string prefix_always = !!this->prefix_for_all_idents()
-				? *this->prefix_for_all_idents() : "";
-			switch (i.tag_here())
-			{
-				case DW_TAG_base_type:
-					// If our config is to use the friendly compiler-determined builtin name like "int",
-					// that does not count as a name we are expected to generate.
-					if (this->use_friendly_base_type_names()) return opt<string>();
-					goto handle_named_def;
-				case DW_TAG_typedef:
-					return prefix_always + *i.name_here();
-				case DW_TAG_structure_type:
-					if (i.name_here())
-					{ tag_prefix = "struct "; goto handle_named_def; }
-					else goto handle_anonymous;
-				case DW_TAG_union_type:
-					if (i.name_here())
-					{ tag_prefix = "union "; goto handle_named_def; }
-					else goto handle_anonymous;
-				case DW_TAG_class_type:
-					if (i.name_here())
-					{ tag_prefix = "class "; goto handle_named_def; }
-					else goto handle_anonymous;
-				case DW_TAG_enumeration_type:
-					if (i.name_here())
-					{ tag_prefix = "enum "; goto handle_named_def; }
-					else goto handle_anonymous;
-				default:
-					if (i.name_here()) goto handle_named_def;
-					goto handle_anonymous;
-				handle_named_def:
-					assert(i.name_here());
-					return (add_tag_prefix ? tag_prefix : string(""))
-						+ prefix_always
-						+ this->cxx_name_from_string(*i.name_here());
-				handle_anonymous:
-					return opt<string>();
-			}
-		};
+		// the null DIE reference does represent something: type void
+		if (!i) return /*string("void")*/ opt<string>();
+		/* How do qualified names fit in to this logic? We used to have
+		 * fq_name_parts_for for DIEs that were not immediate children of a CU.
+		 * FIXME: reinstate logic that can handle this. */
+		bool add_tag_prefix = (k == DEFINING) || this->use_struct_and_union_prefixes();
+		string tag_prefix;
+		string prefix_always = !!this->prefix_for_all_idents()
+			? *this->prefix_for_all_idents() : "";
+		switch (i.tag_here())
+		{
+			case DW_TAG_base_type:
+				// If our config is to use the friendly compiler-determined builtin name like "int",
+				// that does not count as a name we are expected to generate.
+				if (this->use_friendly_base_type_names()) return opt<string>();
+				goto handle_named_def;
+			case DW_TAG_typedef:
+				return prefix_always + *i.name_here();
+			case DW_TAG_structure_type:
+				if (i.name_here())
+				{ tag_prefix = "struct "; goto handle_named_def; }
+				else goto handle_anonymous;
+			case DW_TAG_union_type:
+				if (i.name_here())
+				{ tag_prefix = "union "; goto handle_named_def; }
+				else goto handle_anonymous;
+			case DW_TAG_class_type:
+				if (i.name_here())
+				{ tag_prefix = "class "; goto handle_named_def; }
+				else goto handle_anonymous;
+			case DW_TAG_enumeration_type:
+				if (i.name_here())
+				{ tag_prefix = "enum "; goto handle_named_def; }
+				else goto handle_anonymous;
+			default:
+				if (i.name_here()) goto handle_named_def;
+				goto handle_anonymous;
+			handle_named_def:
+				assert(i.name_here());
+				return (add_tag_prefix ? tag_prefix : string(""))
+					+ prefix_always
+					+ this->cxx_name_from_string(*i.name_here());
+			handle_anonymous:
+				return opt<string>();
+		}
 	}
 
 	opt<string>
 	cxx_generator_from_dwarf::default_expression_of_type(
-		iterator_df<type_die> t,
-		referencer_fn_t maybe_get_name
+		iterator_df<type_die> t
 	)
 	{
-		if (t.is_a<base_type_die>() || t.is_a<enumeration_type_die>()) return string("0");
-		if (t.is_a<pointer_type_die>()) return string("nullptr");
-		if (t.is_a<with_data_members_die>())
+		auto concrete_t = t->get_concrete_type();
+		if (concrete_t.is_a<base_type_die>() || concrete_t.is_a<enumeration_type_die>()) return string("0");
+		if (concrete_t.is_a<pointer_type_die>()) return string("nullptr");
+		if (concrete_t.is_a<with_data_members_die>())
 		{
-			auto name = maybe_get_name(t, ref_kind::NORMAL);
+			/* We try both 't' and its concretion. This is in case
+			 * a struct type is anonymous but we can use the non-concrete (typedef)
+			 * to name it. */
+			auto name = maybe_get_name(concrete_t, ref_kind::NORMAL);
+			if (name) return *name + "()";
+			name = maybe_get_name(t, ref_kind::NORMAL);
 			if (name) return *name + "()";
 		}
 		return opt<string>();
@@ -315,7 +317,6 @@ namespace tool {
 		iterator_df<type_die> t,
 		const string& name, // <-- this is not really just a "name" -- recursive calls accumulate
 		                    // declarator syntax in this string
-		cxx_generator_from_dwarf::referencer_fn_t maybe_get_name,
 		bool emit_fp_names
 	)
 	{
@@ -364,7 +365,6 @@ namespace tool {
 			indenting_ostream indenting_str(str);
 			indenting_str << defn_of_die(
 				t,
-				maybe_get_name,
 				opt<string>("") /* override_name -- we override it to be empty! */,
 				/* emit_fp_names */ false,
 				/* write_semicolon */ false
@@ -375,7 +375,6 @@ namespace tool {
 			// to declare a thing as of subrange type, just declare it as of the full type
 			str << decl_having_type(t.as_a<subrange_type_die>()->get_type(),
 				name,
-				maybe_get_name,
 				emit_fp_names);
 		}
 		else if (t.is_a<address_holding_type_die>())
@@ -395,7 +394,7 @@ namespace tool {
 			o << op << name;
 			if (do_paren) o << ")";
 			string starred_name = o.str();
-			str << decl_having_type(pointeeT, starred_name, maybe_get_name, /* emit_fp_names */ false);
+			str << decl_having_type(pointeeT, starred_name, /* emit_fp_names */ false);
 		}
 		else if (t.is_a<array_type_die>())
 		{
@@ -405,7 +404,7 @@ namespace tool {
 				|| language == DW_LANG_C 
 				|| language == DW_LANG_C99);
 			auto elT = t.as_a<array_type_die>()->find_type();
-			str << decl_having_type(elT, name, maybe_get_name, emit_fp_names);
+			str << decl_having_type(elT, name, emit_fp_names);
 			vector<opt<Dwarf_Unsigned> > elCounts
 			 = t.as_a<array_type_die>()->dimension_element_counts();
 			for (auto maybe_count : elCounts)
@@ -426,7 +425,7 @@ namespace tool {
 					"$&") // FIXME: test this by commenting out the ?: above
 				);
 			auto innerT = t.as_a<qualified_type_die>()->find_type();
-			str << decl_having_type(innerT, qual + " " + name, maybe_get_name, emit_fp_names);
+			str << decl_having_type(innerT, qual + " " + name, emit_fp_names);
 			/* NOTE: there were some quirks in the original cxx_decl_from_type_die
 			 * implementation, splitting on cxx_type_can_be_qualified(chained_type)),
 			 * but I'm not sure what case that hit (qualified-type DIE wrapped around
@@ -441,10 +440,10 @@ namespace tool {
 			for (auto i_arg = fp_children.first; i_arg != fp_children.second; ++i_arg)
 			{
 				if (i_arg != fp_children.first) ctxt << ", ";
-				ctxt << decl_having_type(i_arg->find_type(), emit_fp_names ? *i_arg.name_here() : "", maybe_get_name, false);
+				ctxt << decl_having_type(i_arg->find_type(), emit_fp_names ? *i_arg.name_here() : "", false);
 			}
 			ctxt << ")";
-			str << decl_having_type(rett, ctxt.str(), maybe_get_name, false);
+			str << decl_having_type(rett, ctxt.str(), false);
 			// str << " /* return type is " << rett << " */ ";
 		}
 		else /*including if (t.is_a<string_type_die>()) */
@@ -459,9 +458,9 @@ namespace tool {
 	string
 	cxx_generator_from_dwarf::decl_of_die(
 		iterator_df<program_element_die> d,
-		cxx_generator_from_dwarf::referencer_fn_t maybe_get_name,
 		bool emit_fp_names,
-		bool write_semicolon /* = false */
+		bool write_semicolon /* = false */,
+		opt<string> override_name /* = opt<string>() */
 	)
 	{
 		ostringstream out;
@@ -471,13 +470,12 @@ namespace tool {
 		{
 			out << "extern " << decl_having_type(
 				d.as_a<variable_die>()->find_type(),
-				cxx_name_from_string(*d.name_here()), // <-- how do we pick names to use for definitions? namer should do this too?
-				maybe_get_name,
+				override_name ? *override_name : cxx_name_from_string(*d.name_here()), // <-- how do we pick names to use for definitions? namer should do this too?
 				false) << (write_semicolon ? ";" : "") << std::endl;
 		}
 		else if (d.is_a<subprogram_die>())
 		{
-			string name_to_use = cxx_name_from_string(*d.name_here());
+			string name_to_use = override_name ? *override_name : cxx_name_from_string(*d.name_here());
 			string lang_to_use;
 			// want to compare against codegen context somehow
 			switch (d.enclosing_cu()->get_language())
@@ -513,7 +511,6 @@ namespace tool {
 			out << decl_having_type(
 				d.as_a<subprogram_die>(),
 				name_to_use, // <-- how do we pick names to use for definitions? namer should do this too?
-				maybe_get_name,
 				true);
 			if (write_semicolon) out << ";";
 			out << endl;
@@ -528,7 +525,7 @@ namespace tool {
 			 * How can we force maybe_get_name to always include it, or to leave it out?
 			 * For now we rely on that the default is to icnlude it. */
 			/* We can only forward-declare something we're giving a name to. */
-			opt<string> maybe_name = maybe_get_name(d, DEFINING);
+			opt<string> maybe_name = override_name ? override_name : maybe_get_name(d, DEFINING);
 			if (maybe_name)
 			{
 				out << *maybe_name << (write_semicolon ? ";" : "")
@@ -544,8 +541,7 @@ namespace tool {
 			 * is the only thing we output. */
 			out << "typedef " << decl_having_type(
 				d.as_a<typedef_die>()->find_type(),
-				cxx_name_from_string(*d.name_here()), // <-- how do we pick names to use for definitions?
-				maybe_get_name,
+				override_name ? *override_name : cxx_name_from_string(*d.name_here()), // <-- how do we pick names to use for definitions?
 				false) << (write_semicolon ? ";" : "") << std::endl;
 		}
 		else if (d.is_a<type_die>())
@@ -563,8 +559,7 @@ namespace tool {
 	}
 
 	cxx_generator_from_dwarf::strmanip_t cxx_generator_from_dwarf::body_of_subprogram_die(
-		iterator_df<subprogram_die> i_d,
-		cxx_generator_from_dwarf::referencer_fn_t maybe_get_name
+		iterator_df<subprogram_die> i_d
 	)
 	{
 		cxx_generator_from_dwarf::strmanip_t self;
@@ -572,8 +567,14 @@ namespace tool {
 			auto ret_t = i_d->get_return_type();
 			if (ret_t && ret_t->get_concrete_type())
 			{
-				opt<string> maybe_str = default_expression_of_type(ret_t->get_concrete_type(),
-					maybe_get_name);
+				opt<string> maybe_str = default_expression_of_type(ret_t);
+				if (!maybe_str)
+				{
+					cerr << "Could not generate default expression of type "
+						<< ret_t.summary()
+						<< " (concretely: " << ret_t->get_concrete_type().summary()
+						<< ")" << endl;
+				}
 				assert(maybe_str && "can generate default expression for return type");
 				out << "return " << *maybe_str << ";" << endl;
 			}
@@ -591,7 +592,6 @@ namespace tool {
 	 * initial tabbing level. */
 	cxx_generator_from_dwarf::strmanip_t cxx_generator_from_dwarf::defn_of_die(
 		iterator_df<program_element_die> i_d,
-		cxx_generator_from_dwarf::referencer_fn_t maybe_get_name,
 		opt<string> override_name /* = opt<string>() */,
 		bool emit_fp_names /* = true */,
 		bool write_semicolon /* = true */
@@ -610,7 +610,7 @@ namespace tool {
 				for (auto i_child = children_seq.first; i_child != children_seq.second; ++i_child)
 				{
 					out.inc_level();
-					out << defn_of_die(i_child, maybe_get_name);
+					out << defn_of_die(i_child);
 					out.dec_level();
 				}
 				out << std::endl;
@@ -647,7 +647,7 @@ namespace tool {
 					for (auto i_child = children_seq.first; i_child != children_seq.second; ++i_child)
 					{
 						out.inc_level();
-						out << defn_of_die(i_child, maybe_get_name);
+						out << defn_of_die(i_child);
 						out.dec_level();
 					}
 					out.dec_level();
@@ -670,11 +670,10 @@ namespace tool {
 			}
 			else if (i_d.is_a<subprogram_die>())
 			{
-				out << decl_having_type(i_d, *i_d.name_here(), maybe_get_name, true) << endl
+				out << decl_having_type(i_d, *i_d.name_here(), true) << endl
 					<< "{" << endl;
 				out.inc_level();
-				out << this->body_of_subprogram_die(i_d.as_a<subprogram_die>(),
-					maybe_get_name);
+				out << this->body_of_subprogram_die(i_d.as_a<subprogram_die>());
 				out.dec_level();
 				out << "}" << endl;
 			}
@@ -744,7 +743,7 @@ namespace tool {
 				 * overlapping with member names (and with each other).
 				 */
 				out << decl_having_type(p_d->find_type(), *maybe_get_name(p_d, DEFINING),
-					maybe_get_name, /* emit fp names */ false
+					/* emit fp names */ false
 					
 					);
 				// FIXME: type must be complete! Need to pass this down!

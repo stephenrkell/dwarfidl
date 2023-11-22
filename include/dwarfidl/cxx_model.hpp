@@ -82,9 +82,7 @@ protected:
 
 public:
 	const spec::abstract_def *const p_spec;
-	typedef std::function< opt<string>(iterator_base, ref_kind) > referencer_fn_t;
-	virtual referencer_fn_t get_default_referencer() const;
-
+	virtual opt<string> maybe_get_name(iterator_base i, enum ref_kind k);
 	cxx_generator_from_dwarf() : p_spec(&spec::DEFAULT_DWARF_SPEC) {}
 	cxx_generator_from_dwarf(const spec::abstract_def& s) : p_spec(&s) {}
 
@@ -126,36 +124,32 @@ public:
 	decl_having_type(
 		iterator_df<type_die> t,
 		const string& name,
-		referencer_fn_t r,
 		bool emit_fp_names = true
 	);
 
 	virtual string
 	decl_of_die(
 		iterator_df<core::program_element_die> d,
-		referencer_fn_t r,
 		bool emit_fp_names = false,
-		bool write_semicolon = false
+		bool write_semicolon = false,
+		opt<string> override_name = opt<string>()
 	);
 
 	virtual opt<string>
 	default_expression_of_type(
-		iterator_df<type_die> t,
-		referencer_fn_t r
+		iterator_df<type_die> t
 	);
 
 	/* We package some of our functionality as stream manipulators. */
 	typedef std::function< indenting_ostream&( indenting_ostream& ) > strmanip_t;
 	virtual strmanip_t defn_of_die(
 		iterator_df<core::program_element_die> i_d,
-		referencer_fn_t r,
 		opt<string> override_name = opt<string>(),
 		bool emit_fp_names = true,
 		bool write_semicolon = true
 	);
 	virtual strmanip_t body_of_subprogram_die(
-		iterator_df<core::subprogram_die> i_d,
-		referencer_fn_t r
+		iterator_df<core::subprogram_die> i_d
 	);
 
 	string 

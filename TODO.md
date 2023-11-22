@@ -1,18 +1,30 @@
 # bugs in C++ generation
 
 * bool versus _Bool
-* noopgen: supply a body
+* DONE: noopgen: supply a body
 * wchar_t?
 * bitfields
 
 # noopgen completion
 
-* supplying a body
-* supplying attributes
+* DONE: supplying a body
+* DONE: supplying attributes
+* DONE: we don't noop-prefix stuff in the preload library or in librunt or in libdlbind
+  -- need to get our pubsyms from a more realistic link of the preload library
+* yesops are UNDs -- OK, caused by wrong position of .a file on command line
+* link errors about protected yesops and others "not defined locally"
+  -- the data symbols are from librunt but these are missing from make rules
+  -- librunt functions should be yesop'd just like others,
+        but since they are not in the _preload.a, they are not. What to do?
+        There's no .a-making command that resembles an ordinary link command.
+        We only need the .a so we can objcopy it.
+        Maybe we need another linker plugin?
+        It would enumerate all the link inputs, output an archive and then exit(0).
+        It's a bit like -Wl,-r but it does not combine sections or use a linker script in any way.
 
 # Library cleanup
 
-Make the naming function a virtual member function.
+DONE: Make the naming function a virtual member function.
 
 Most of libdwarfidl actually has nothing to do with the dwarfidl language.
 The following files should be excised

@@ -12,13 +12,13 @@ pkgconfig_DATA = dwarfidl.pc
 
 dwarfidl_includedir = $(includedir)/dwarfidl
 dwarfidl_include_HEADERS = include/dwarfidl/create.hpp include/dwarfidl/cxx_model.hpp \
-  include/dwarfidl/dwarfidl_cxx_target.hpp include/dwarfidl/dwarf_interface_walk.hpp \
+  include/dwarfidl/dependency_ordering_cxx_target.hpp include/dwarfidl/dwarf_interface_walk.hpp \
   include/dwarfidl/print.hpp include/dwarfidl/dwarfprint.hpp \
   include/dwarfidl/lang.hpp include/dwarfidl/dwarfidlNewCParser.h include/dwarfidl/dwarfidlNewCLexer.h \
   include/dwarfidl/dwarfidlNewCLexer.h include/dwarfidl/dwarfidlNewCParser.h
 
 lib_LTLIBRARIES = src/libdwarfidl.la
-src_libdwarfidl_la_SOURCES = src/cxx_model.cpp src/dwarfidl_cxx_target.cpp src/dwarf_interface_walk.cpp src/create.cpp src/lang.cpp src/print.cpp src/dwarfprint.cpp parser/dwarfidlNewCLexer.c parser/dwarfidlNewCParser.c
+src_libdwarfidl_la_SOURCES = src/cxx_model.cpp src/dependency_ordering_cxx_target.cpp src/dwarf_interface_walk.cpp src/create.cpp src/lang.cpp src/print.cpp src/dwarfprint.cpp parser/dwarfidlNewCLexer.c parser/dwarfidlNewCParser.c
 src_libdwarfidl_la_LIBADD = -lantlr3c -lboost_filesystem -lboost_regex -lboost_system -lboost_serialization $(LIBANTLR3CXX_LIBS) $(LIBCXXGEN_LIBS) $(LIBDWARFPP_LIBS) $(LIBSRK31CXX_LIBS) $(LIBCXXFILENO_LIBS) -lz
 src_libdwarfidl_la_LDFLAGS = -Wl,-rpath,$(realpath $(top_srcdir))/lib
 src_libdwarfidl_la_CFLAGS = $(AM_CFLAGS)
