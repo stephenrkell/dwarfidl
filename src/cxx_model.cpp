@@ -722,10 +722,7 @@ namespace tool {
 							cur_offset = dwarf::expr::evaluator(
 								prev_member->get_data_member_location()->at(0), 
 								p_d.spec_here(),
-								stack<Dwarf_Unsigned>(
-									// push zero as the initial stack value
-									deque<Dwarf_Unsigned>(1, 0UL)
-									)
+								{ 0 } /* push zero as the initial stack value */
 								).tos()
 								+ *prev_member_calculated_byte_size; 
 						}
@@ -754,10 +751,7 @@ namespace tool {
 					Dwarf_Unsigned target_offset = dwarf::expr::evaluator(
 						p_d->get_data_member_location()->at(0), 
 						p_d.spec_here(),
-						stack<Dwarf_Unsigned>(
-							// push zero as the initial stack value
-							deque<Dwarf_Unsigned>(1, 0UL)
-							)
+						{ 0 } /* push zero as the initial stack value */
 						).tos();
 
 					if (!(target_offset > 0 && cur_offset != std::numeric_limits<Dwarf_Unsigned>::max()))
