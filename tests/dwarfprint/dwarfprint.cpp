@@ -48,7 +48,8 @@ public:
 	counting_ostream(std::ostream& s = std::cout)
 	: boost::iostreams::filtering_ostreambuf(),
 	  counting_filter(&chars, &newlines),
-	  std::ostream(static_cast<boost::iostreams::filtering_ostreambuf *>(this))
+	  std::ostream(static_cast<boost::iostreams::filtering_ostreambuf *>(this)),
+	  chars(0), newlines(0)
 	{
 		push(static_cast<counting_filter&>(*this));
 		push(s);
@@ -148,9 +149,11 @@ int main(int argc, char **argv)
 	assert(tree);
 	// how many lines did we parse? it should match the number output
 	unsigned nlines = ret.stop->getLine(ret.stop);
+	std::clog << "DEBUG: parsed " << nlines << " versus written: "
+		<< (counting_outf.newlines_written() - 1) << std::endl;
+	std::clog << "DEBUG: temporary output file is at " << tmpname << std::endl;
 	assert(nlines == counting_outf.newlines_written() - 1);
 	unlink(tmpname);
-	//std::cerr << "DEBUG: temporary output file is at " << tmpname << std::endl;
 
 	return 0;
 }
