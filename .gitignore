@@ -5,11 +5,13 @@
 /src/test_dwarfprint
 /src/test_parser
 /parser/test_parser
-/parser/dwarfidlSimpleCParser.c
-/parser/dwarfidlSimpleCLexer.c
-/parser/dwarfidlSimpleCParser.h
-/parser/dwarfidlSimpleCLexer.h
-/parser/dwarfidlSimpleC.tokens
+
+# Parser generated files
+parser/*.c
+parser/*.h
+parser/*.tokens
+parser/*.py
+
 /dwarfidlSimpleC.tokens
 
 /Makefile
@@ -43,6 +45,7 @@ Makefile.in
 /config.log
 /ltmain.sh
 /libtool
+config.mk
 
 
 # Compiled Object files
@@ -62,6 +65,7 @@ Makefile.in
 
 # Compiled Dynamic libraries
 *.so
+*.so.*
 *.dylib
 *.dll
 
@@ -90,3 +94,28 @@ Makefile.in
 .fuse_hidden*
 .nfs*
 .dropbox*
+
+
+# Contrib
+contrib/env.sh
+contrib/config.mk
+contrib/antlr*
+contrib/libantlr3c-*
+
+
+# Examples
+contrib/libantlr3c
+contrib/libcxxgen
+contrib/libdwarfpp
+examples/dwarfhpp
+examples/dwarfidldump
+examples/generate-ocaml-ctypes
+
+
+# Parser
+parser/*_test_parser
+
+
+# Generated files
+include/dwarfidl/dwarfidlNewCLexer.h
+include/dwarfidl/dwarfidlNewCParser.h
