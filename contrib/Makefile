@@ -127,7 +127,9 @@ build-libdwarfpp: libdwarfpp/config.status
 	$(MAKE) -C libdwarfpp
 
 clean::
+	$(MAKE) -C libdwarfpp/contrib clean
 	if test -f libdwarfpp/Makefile; then $(MAKE) -C libdwarfpp clean; fi
+	rm -f libdwarfpp/config.status
 
 CONFIG_MK += \nLIBDWARFPP_CXXFLAGS += -I$(LIBDWARFPP_DIR)/include\n
 CONFIG_MK += \nLIBDWARFPP_LIBS += -L$(LIBDWARFPP_DIR)/lib -Wl,-rpath,$(LIBDWARFPP_DIR)/lib -ldwarfpp\n
