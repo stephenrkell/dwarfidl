@@ -115,7 +115,7 @@ LIBCXXFILENO_DIR ?= $(LIBDWARFPP_DIR)/contrib/libc++fileno
 LIBSRK31CXX_DIR ?= $(LIBDWARFPP_DIR)/contrib/libsrk31c++
 
 libdwarfpp/config.status:
-	cd libdwarfpp && ./autogen.sh && git submodule init && git submodule update && \
+	cd libdwarfpp && ./autogen.sh && \
 	$(MAKE) -C contrib && ( . contrib/env.sh && \
 	 ./configure --prefix=$(CONTRIB)/usr $(LIBDWARFPP_CONFIGURE_FLAGS) )
 
