@@ -57,12 +57,14 @@ subconfigs :=
 #	ANTLR3_JAR ?= $(CONTRIB)/antlr3.jar
 #chmod +x "$@"
 
-# BUT ARGH. The 3.4 runtime still has the getParent bug.
-# So reinstate the patch fix.
+# GAH: tar 1.35 has a bug with --keep-newer-files, so we nuke any existing contents
+# https://savannah.gnu.org/bugs/index.php?65838
 libantlr3c-3.4/configure.ac: antlr-3.4.tar.gz
-	mkdir -p libantlr3c-3.4 && cd libantlr3c-3.4 && tar --strip-components=3 --keep-newer-files -xvzf "$(CONTRIB)/$<" antlr-3.4/runtime/C
+	mkdir -p libantlr3c-3.4 && cd libantlr3c-3.4 && rm -rf * .??* && tar --strip-components=3 -xvzf "$(CONTRIB)/$<" antlr-3.4/runtime/C
 libantlr3c/configure.ac: libantlr3c-3.4/configure.ac
 	ln -sf -T "$$(dirname $<)" "$$(dirname $@)"
+# BUT ARGH. The 3.4 runtime still has the getParent bug.
+# So reinstate the patch fix.
 libantlr3c/Makefile.in: libantlr3c/configure.ac
 	# HACK: if the patch fails, it's probably because we've already applied it in an earlier failed run of these rules
 	cd libantlr3c && patch -p1 < "$(CONTRIB)"/libantlr3c-3.4-getparent-allow-null.patch </dev/null || true
