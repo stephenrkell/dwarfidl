@@ -10,6 +10,3 @@
 [submodule "contrib/libdwarfpp"]
 	path = contrib/libdwarfpp
 	url = https://github.com/stephenrkell/libdwarfpp.git
-[submodule "contrib/antlr3"]
-	path = contrib/antlr3
-	url = https://github.com/antlr/antlr3
