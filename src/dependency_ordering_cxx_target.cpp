@@ -113,6 +113,18 @@ void dependency_ordering_cxx_target::add_order_constraint(
 	m_order_constraints.insert(new_ent);
 }	
 
+iterator_df<type_die>
+dependency_ordering_cxx_target::concrete_type_cached(const iterator_df<type_die>& t)
+{
+	if (!t) return t;
+	Dwarf_Off off = t.offset_here();
+	auto found = m_concrete_type_cache.find(off);
+	if (found != m_concrete_type_cache.end()) return found->second;
+	auto concrete = t->get_concrete_type();
+	m_concrete_type_cache[off] = concrete;
+	return concrete;
+}
+
 opt<string>
 dependency_ordering_cxx_target::maybe_get_name(iterator_base i, enum ref_kind k)
 {
@@ -130,7 +142,7 @@ dependency_ordering_cxx_target::maybe_get_name(iterator_base i, enum ref_kind k)
 		// if the referred-to type is concrete i.e. not a qualified
 		// or typedef, just add the DEF dependency
 		if (i && i.is_a<type_die>()
-			&& i.as_a<type_die>()->get_concrete_type() == i)
+			&& concrete_type_cached(i.as_a<type_die>()) == i)
 		{
 			auto new_pair = make_pair(EMIT_DEF, i);
 			add_order_constraint(this->current_pair_transitively_closing_from, new_pair);
@@ -145,8 +157,8 @@ dependency_ordering_cxx_target::maybe_get_name(iterator_base i, enum ref_kind k)
 			add_order_constraint(this->current_pair_transitively_closing_from,
 				immediate_pair);
 			maybe_add_to_worklist(immediate_pair);
-			auto concrete_pair = make_pair(EMIT_DEF, 
-				i.as_a<type_die>()->get_concrete_type());
+			auto concrete_pair = make_pair(EMIT_DEF,
+				concrete_type_cached(i.as_a<type_die>()));
 			add_order_constraint(this->current_pair_transitively_closing_from,
 				concrete_pair);
 		}
@@ -292,118 +304,99 @@ void dependency_ordering_cxx_target::write_ordered_output()
 	 * here, but not clear it would benefit any application). */
 	map<string, pair<uint32_t, string> > type_definitions_generated_by_name;
 
-	/* We output what we can, until there's nothing left. */
-	while (!m_output_fragments.empty())
+	/* We emit the fragments in dependency order using Kahn's algorithm. */
+	typedef pair<emit_kind, iterator_base> node_t;
+	map<node_t, size_t, compare_with_type_equality> indegree;
+	set<node_t, compare_with_type_equality> ready;
+	for (auto i_frag = m_output_fragments.begin(); i_frag != m_output_fragments.end(); ++i_frag)
 	{
-		unsigned i = 0;
-		bool removed_one = false;
-		auto i_pair = m_output_fragments.begin();
-		while (i_pair != m_output_fragments.end())
+		auto deps_seq = m_order_constraints.equal_range(i_frag->first);
+		size_t n = std::distance(deps_seq.first, deps_seq.second);
+		indegree[i_frag->first] = n;
+		if (n == 0) ready.insert(i_frag->first);
+	}
+
+	while (!ready.empty())
+	{
+		// take the smallest-keyed ready fragment, mirroring the old emit order
+		auto ready_it = ready.begin();
+		node_t el = *ready_it;
+		ready.erase(ready_it);
+
+		auto i_pair = m_output_fragments.find(el);
+		assert(i_pair != m_output_fragments.end());
+		auto& d = el.second;
+		auto& frag = i_pair->second;
+
+		// emit this fragment. if we should... check for type compatibility
+		map<string, pair<uint32_t, string> >::iterator found =
+			type_definitions_generated_by_name.end();
+		bool is_a_named_type_die = d.is_a<type_die>() && d.name_here();
+		bool already_emitted_compatible_type =
+			is_a_named_type_die &&
+			(found = type_definitions_generated_by_name.find(*d.name_here()))
+			!= type_definitions_generated_by_name.end();
+		if (!already_emitted_compatible_type)
 		{
-			auto& el = i_pair->first;
-			auto&d = el.second;
-			auto& frag = i_pair->second;
-			/* Can we emit this? */
-			auto deps_seq = m_order_constraints.equal_range(el);
-			bool all_sat = true;
-			for (auto i_dep = deps_seq.first; i_dep != deps_seq.second; ++i_dep)
+			out << frag;
+			if (is_a_named_type_die)
 			{
-				auto& dep = i_dep->second;
-				bool already_emitted = (emitted.find(dep) != emitted.end());
-				all_sat &= already_emitted;
-				if (!already_emitted)
+				opt<uint32_t> maybe_our_summary_code = d.as_a<type_die>()->summary_code();
+				// duplicates are OK
+				if (maybe_our_summary_code)
 				{
-					debug() << "Can't emit " << el.first << " of " << el.second << " yet"
-						<< " because not yet emitted (maybe among others) "
-						<< dep.first << " of " << dep.second
-						<< "; continuing (total " << m_output_fragments.size()
-						<< " fragments remaining of which we are number " << i << ")" << endl;
-					assert(!all_sat);
-					break;
+					type_definitions_generated_by_name[*d.name_here()] = make_pair(
+						*maybe_our_summary_code, frag);
 				}
 			}
-			if (all_sat)
-			{
-				// emit this fragment. if we should... check for type compatibility
-				map<string, pair<uint32_t, string> >::iterator found = 
-					type_definitions_generated_by_name.end();
-				bool is_a_named_type_die = d.is_a<type_die>() && d.name_here();
-				bool already_emitted_compatible_type =
-					is_a_named_type_die &&
-					(found = type_definitions_generated_by_name.find(*d.name_here()))
-					!= type_definitions_generated_by_name.end();
-				if (!already_emitted_compatible_type)
-				{
-					out << frag;
-					if (is_a_named_type_die)
-					{
-						opt<uint32_t> maybe_our_summary_code = d.as_a<type_die>()->summary_code();
-						// incompletes can be ignored -- duplicate declarations are OK
-						if (maybe_our_summary_code)
-						{
-							type_definitions_generated_by_name[*d.name_here()] = make_pair(
-								*maybe_our_summary_code, frag);
-						}
-					}
-				}
-				else if (is_a_named_type_die)
-				{
-					/* Check the thing we found is compatible with us. */
-					assert(found != type_definitions_generated_by_name.end());
-					auto found_summary_code = found->second.first;
-					opt<uint32_t> maybe_our_summary_code = d.as_a<type_die>()->summary_code();
-					assert(maybe_our_summary_code);
-					if (found->second.first != *maybe_our_summary_code)
-					{
-						debug(0) << "Trying to emit incompatible type definition "
-							<< "for a name already used: "
-							<< *d.name_here()
-							<< ", " << d.summary()
-							<< ", emitted frag was " << found->second.second << endl;
-					}
-				}
-				// add to the emitted set
-				auto retpair = emitted.insert(el);
-				assert(retpair.second); // really inserted
-				// first remove from order constraints any constraint depending on what we just emitted
-				auto depending_on_this = order_constraints_reversed.equal_range(i_pair->first);
-				for (auto i_rev = depending_on_this.first;
-					i_rev != depending_on_this.second;
-					++i_rev)
-				{
-					auto& depending = i_rev->second;
-					auto& depended_on = i_rev->first;
-					/* Careful: we only want to erase those constraints that
-					 * both have key 'depending' and have value 'depended on' */
-					auto pos = m_order_constraints.lower_bound(depending);
-					while (pos->first == depending)
-					{
-						if (pos->second == depended_on) pos = m_order_constraints.erase(pos);
-						else ++pos;
-					}
-				}
-				// now remove from output fragments
-				i_pair = m_output_fragments.erase(i_pair);
-				out << "\n// fragments remaining: " << m_output_fragments.size() << endl;
-				removed_one = true;
-			}
-			else /* continue to next */ { ++i_pair; ++i; }
 		}
-		if (!removed_one)
+		else if (is_a_named_type_die)
 		{
-			debug(0) << "digraph stuck_with_order_constraints {" << endl;
-			for (auto pair : m_order_constraints)
+			assert(found != type_definitions_generated_by_name.end());
+			opt<uint32_t> maybe_our_summary_code = d.as_a<type_die>()->summary_code();
+			assert(maybe_our_summary_code);
+			if (found->second.first != *maybe_our_summary_code)
 			{
-				debug() << pair.first.first << "_of_" << std::hex;
-				if (pair.first.second) debug(0) << pair.first.second.offset_here(); else debug(0) << "void";
-				debug(0) << " -> "
-				     << pair.second.first << "_of_" << std::hex;
-				if (pair.second.second) debug(0) << pair.second.second.offset_here(); else debug(0) << "void";
-				debug(0) << "; //" << pair.first.second << " -> " << pair.second.second << endl;
+				debug(0) << "Trying to emit incompatible type definition "
+					<< "for a name already used: "
+					<< *d.name_here()
+					<< ", " << d.summary()
+					<< ", emitted frag was " << found->second.second << endl;
 			}
-			debug(0) << "}" << endl;
-			assert(false); abort();
-		} /* lack of progress */
+		}
+		auto retpair = emitted.insert(el);
+		assert(retpair.second);
+
+		// release dependents
+		auto depending_on_this = order_constraints_reversed.equal_range(el);
+		for (auto i_rev = depending_on_this.first; i_rev != depending_on_this.second; ++i_rev)
+		{
+			auto& depending = i_rev->second;
+			auto found_indeg = indegree.find(depending);
+			assert(found_indeg != indegree.end());
+			assert(found_indeg->second > 0);
+			if (--found_indeg->second == 0) ready.insert(depending);
+		}
+
+		m_output_fragments.erase(i_pair);
+		out << "\n// fragments remaining: " << m_output_fragments.size() << endl;
+	}
+
+	if (!m_output_fragments.empty())
+	{
+		// We made no further progress yet fragments remain: cycle or missing fragment
+		debug(0) << "digraph stuck_with_order_constraints {" << endl;
+		for (auto pair : m_order_constraints)
+		{
+			debug() << pair.first.first << "_of_" << std::hex;
+			if (pair.first.second) debug(0) << pair.first.second.offset_here(); else debug(0) << "void";
+			debug(0) << " -> "
+			     << pair.second.first << "_of_" << std::hex;
+			if (pair.second.second) debug(0) << pair.second.second.offset_here(); else debug(0) << "void";
+			debug(0) << "; //" << pair.first.second << " -> " << pair.second.second << endl;
+		}
+		debug(0) << "}" << endl;
+		assert(false); abort();
 	}
 }
 

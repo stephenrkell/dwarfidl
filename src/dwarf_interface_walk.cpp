@@ -47,13 +47,34 @@ using boost::format_all;
 
 using std::function;
 
+/* Debug output is gated behind DWARFIDL_DEBUG_LEVEL.
+ * The messages below stream iterator summaries and whole DIEs (via summary()/operator<<), which are expensive to format.
+ */
+static std::ostream& idl_debug(int msg_level = 1)
+{
+	static std::ofstream dummy;
+	static int level = []() {
+		char *level_str = getenv("DWARFIDL_DEBUG_LEVEL");
+		return level_str ? atoi(level_str) : 0;
+	}();
+	if (level >= msg_level) return cerr;
+	return dummy;
+}
+
 namespace dwarf { namespace tool {
 
-void my_walk_type(iterator_df<type_die> t, iterator_df<program_element_die> reason, 
-	const function<bool(iterator_df<type_die>, iterator_df<program_element_die>)>& pre_f, 
-	const function<void(iterator_df<type_die>, iterator_df<program_element_die>)>& post_f
-	= std::function<void(iterator_df<type_die>, iterator_df<program_element_die>)>(),
-	const type_set& currently_walking = type_set()
+/* Internal worker tracking a "grey set" -- the set of types on the current DFS
+ * path -- so we don't recurse into a type we're already inside (a "grey node").
+ *
+ * The set is keyed by *type equality*, whose hash/equality functions are
+ * structural and therefore expensive, so the way we maintain it matters:
+ *  - Shallow paths recurse on a *copy* of the grey set.
+ *  - Deep paths instead thread a single set by reference
+ */
+static void my_walk_type_impl(iterator_df<type_die> t, iterator_df<program_element_die> reason,
+	const function<bool(iterator_df<type_die>, iterator_df<program_element_die>)>& pre_f,
+	const function<void(iterator_df<type_die>, iterator_df<program_element_die>)>& post_f,
+	type_set& currently_walking
 )
 {
 	if (currently_walking.find(t) != currently_walking.end()) return; // "grey node"
@@ -62,8 +83,13 @@ void my_walk_type(iterator_df<type_die> t, iterator_df<program_element_die> reas
 	if (pre_f) continue_recursing = pre_f(t, reason); // i.e. we do walk "void"
 	else continue_recursing = true;
 
-	type_set next_currently_walking = currently_walking; 
-	next_currently_walking.insert(t);
+	static const size_t DEEP_THRESHOLD = 16;
+	const bool deep = currently_walking.size() >= DEEP_THRESHOLD;
+	/* Shallow: recurse on our own copy (no erase needed). Deep: share by ref. */
+	type_set shallow_copy;
+	if (!deep) shallow_copy = currently_walking;
+	type_set& grey = deep ? currently_walking : shallow_copy;
+	grey.insert(t);
 
 	if (continue_recursing)
 	{
@@ -71,28 +97,28 @@ void my_walk_type(iterator_df<type_die> t, iterator_df<program_element_die> reas
 		else if (t.is_a<type_chain_die>()) // unary case -- includes typedefs, arrays, pointer/reference, ...
 		{
 			// recursively walk the chain's target
-			my_walk_type(t.as_a<type_chain_die>()->find_type(), t, pre_f, post_f, next_currently_walking);
+			my_walk_type_impl(t.as_a<type_chain_die>()->find_type(), t, pre_f, post_f, grey);
 		}
-		else if (t.is_a<with_data_members_die>()) 
+		else if (t.is_a<with_data_members_die>())
 		{
 			// recursively walk all members
 			auto member_children = t.as_a<with_data_members_die>().children().subseq_of<member_die>();
 			for (auto i_child = member_children.first;
 				i_child != member_children.second; ++i_child)
 			{
-				my_walk_type(i_child->find_type(), i_child, pre_f, post_f , next_currently_walking);
+				my_walk_type_impl(i_child->find_type(), i_child, pre_f, post_f, grey);
 			}
 			// visit all inheritances
 			auto inheritance_children = t.as_a<with_data_members_die>().children().subseq_of<inheritance_die>();
 			for (auto i_child = inheritance_children.first;
 				i_child != inheritance_children.second; ++i_child)
 			{
-				 my_walk_type(i_child->find_type(), i_child, pre_f, post_f , next_currently_walking);
+				 my_walk_type_impl(i_child->find_type(), i_child, pre_f, post_f, grey);
 			}
 
 			/*auto children_with_type = t.as_a<with_data_members_die>().children().subseq_of<with_type_describing_layout_die>();
 			for (auto i_child = children_with_type.first; i_child != children_with_type.second; i_child++) {
-				 my_walk_type(i_child->find_type(), i_child, pre_f, post_f , next_currently_walking);
+				 my_walk_type_impl(i_child->find_type(), i_child, pre_f, post_f, grey);
 				 }*/
 			}
 		else if (t.is_a<subrange_type_die>())
@@ -100,27 +126,27 @@ void my_walk_type(iterator_df<type_die> t, iterator_df<program_element_die> reas
 			// visit the base type
 			auto explicit_t = t.as_a<subrange_type_die>()->find_type();
 			// HACK: assume this is the same as for enums
-			my_walk_type(explicit_t ? explicit_t : t.enclosing_cu()->implicit_enum_base_type(), t, pre_f, post_f, next_currently_walking);
+			my_walk_type_impl(explicit_t ? explicit_t : t.enclosing_cu()->implicit_enum_base_type(), t, pre_f, post_f, grey);
 		}
 		else if (t.is_a<enumeration_type_die>())
 		{
 			// visit the base type -- HACK: assume subrange base is same as enum's
 			auto explicit_t = t.as_a<enumeration_type_die>()->find_type();
-			my_walk_type(explicit_t ? explicit_t : t.enclosing_cu()->implicit_enum_base_type(), t, pre_f, post_f, next_currently_walking);
+			my_walk_type_impl(explicit_t ? explicit_t : t.enclosing_cu()->implicit_enum_base_type(), t, pre_f, post_f, grey);
 		}
 		else if (t.is_a<type_describing_subprogram_die>())
 		{
 			auto sub_t = t.as_a<type_describing_subprogram_die>();
-			my_walk_type(sub_t->find_type(), sub_t, pre_f, post_f);
+			my_walk_type_impl(sub_t->find_type(), sub_t, pre_f, post_f, grey);
 			auto fps = sub_t.children().subseq_of<formal_parameter_die>();
 			for (auto i_fp = fps.first; i_fp != fps.second; ++i_fp)
 			{
-				my_walk_type(i_fp->find_type(), i_fp, pre_f, post_f, next_currently_walking);
+				my_walk_type_impl(i_fp->find_type(), i_fp, pre_f, post_f, grey);
 			}
 			/*auto vars = sub_t.children().subseq_of<variable_die>();
 			for (auto i_fp = vars.first; i_fp != vars.second; ++i_fp)
 			{
-				my_walk_type(i_fp->find_type(), i_fp, pre_f, post_f, next_currently_walking);
+				my_walk_type_impl(i_fp->find_type(), i_fp, pre_f, post_f, grey);
 				}*/
 		}
 		else
@@ -130,7 +156,21 @@ void my_walk_type(iterator_df<type_die> t, iterator_df<program_element_die> reas
 		}
 	} // end if continue_recursing
 
+	// pop ourselves off the current DFS path -- only the shared, by-reference
+	// set needs restoring; the shallow copy is discarded when this frame returns
+	if (deep) grey.erase(t);
+
 	if (post_f) post_f(t, reason);
+}
+
+void my_walk_type(iterator_df<type_die> t, iterator_df<program_element_die> reason,
+	const function<bool(iterator_df<type_die>, iterator_df<program_element_die>)>& pre_f,
+	const function<void(iterator_df<type_die>, iterator_df<program_element_die>)>& post_f
+	= std::function<void(iterator_df<type_die>, iterator_df<program_element_die>)>()
+)
+{
+	type_set currently_walking;
+	my_walk_type_impl(t, reason, pre_f, post_f, currently_walking);
 }
 
 void 
@@ -148,19 +188,19 @@ gather_interface_dies(root_die& root,
 	/* FIXME: it needn't be just grandchildren. */
 	for (auto i_d = std::move(toplevel_seq.first); i_d != toplevel_seq.second; ++i_d)
 	{
-		std::cerr << "\r" << i_d.summary(); // for debugging
+		idl_debug() << "\r" << i_d.summary(); // for debugging
 		if (pred(i_d))
 		{
-			std::cerr << std::endl;
+			idl_debug() << std::endl;
 			// looks like a goer -- add it to the objs
 			out.insert(i_d);
 			
 			/* utility that will come in handy */
 			auto add_all_types = [&types, &root](iterator_df<type_die> outer_t) {
 				if (outer_t) {
-					cerr << "add_all_types processing offset 0x" << std::hex <<  outer_t.offset_here() << std::dec << ": " << outer_t.summary() << endl;
+					idl_debug() << "add_all_types processing offset 0x" << std::hex <<  outer_t.offset_here() << std::dec << ": " << outer_t.summary() << endl;
 				}
-				my_walk_type(outer_t, iterator_base::END, 
+				my_walk_type(outer_t, iterator_base::END,
 					[&types, &root](iterator_df<type_die> t, iterator_df<program_element_die> reason) -> bool {
 						if (!t) return false; // void case
 						auto memb = reason.as_a<member_die>();
@@ -174,16 +214,16 @@ gather_interface_dies(root_die& root,
 						auto inserted = types.insert(t);
 						if (!inserted.second)
 						{
-							cerr << "Type was already present: " << *t 
+							idl_debug() << "Type was already present: " << *t
 								<< " (or something equal to it: " << *inserted.first
 								<< ")" << endl;
-							// cerr << "Attributes: " << t->copy_attrs(root) << endl;
+							// idl_debug() << "Attributes: " << t->copy_attrs(root) << endl;
 							return false; // was already present
 						}
 						else
 						{
-							cerr << "Inserted new type: " << *t << endl;
-							// cerr << "Attributes: " << t->copy_attrs(root) << endl;
+							idl_debug() << "Inserted new type: " << *t << endl;
+							// idl_debug() << "Attributes: " << t->copy_attrs(root) << endl;
 							return true;
 						}
 					}
@@ -219,7 +259,7 @@ gather_interface_dies(root_die& root,
 		{
 			if (types.find(i_d->as_a<type_die>()) == types.end())
 			{
-				cerr << "BUG: didn't find " << i_d->summary() << " in types list." << endl;
+				idl_debug(0) << "BUG: didn't find " << i_d->summary() << " in types list." << endl;
 			}
 		}
 	}

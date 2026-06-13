@@ -12,17 +12,23 @@ namespace dwarfidl
 	using namespace dwarf;
 	using namespace dwarf::core;
 
+	// AST node -> DIE cache; used to avoid creating duplicate DIEs on retry passes
+	typedef std::map<antlr::tree::Tree *, iterator_base> created_die_cache;
+
 	iterator_base create_dies(antlr::tree::Tree *ast);
 	iterator_base create_dies(const iterator_base& parent, antlr::tree::Tree *ast);
 	iterator_base create_dies(const iterator_base& parent, const string& some_dwarfidl);
-	iterator_base create_one_die(const iterator_base& parent, antlr::tree::Tree *ast, 
+	iterator_base create_one_die(const iterator_base& parent, antlr::tree::Tree *ast,
 								 std::vector<std::pair<const iterator_base&, antlr::tree::Tree*> > &postpone,
 								 const std::map<antlr::tree::Tree *, iterator_base>& nested
-								 = std::map<antlr::tree::Tree *, iterator_base>());
+								 = std::map<antlr::tree::Tree *, iterator_base>(),
+								 created_die_cache *created = nullptr);
 	 iterator_base create_one_die_with_children(const iterator_base& parent, antlr::tree::Tree *ast,
-												std::vector<std::pair<const iterator_base&, antlr::tree::Tree*> > &postpone);
+												std::vector<std::pair<const iterator_base&, antlr::tree::Tree*> > &postpone,
+												created_die_cache *created = nullptr);
 	 iterator_base find_or_create_die(const iterator_base& parent, antlr::tree::Tree *ast,
-									  std::vector<std::pair<const iterator_base&, antlr::tree::Tree*> > &postpone);
+									  std::vector<std::pair<const iterator_base&, antlr::tree::Tree*> > &postpone,
+									  created_die_cache *created = nullptr);
 
 	encap::attribute_value make_attribute_value(antlr::tree::Tree *d, 
 		const iterator_base& context, 

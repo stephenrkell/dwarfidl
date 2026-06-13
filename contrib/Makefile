@@ -116,6 +116,15 @@ LIBDWARFPP_DIR ?= $(CONTRIB)/libdwarfpp
 LIBCXXFILENO_DIR ?= $(LIBDWARFPP_DIR)/contrib/libc++fileno
 LIBSRK31CXX_DIR ?= $(LIBDWARFPP_DIR)/contrib/libsrk31c++
 
+# Select the libdwarfpp DWARF backend and propagate it to libdwarfpp's
+# ./configure below. This branch targets elfutils' libdw, so default to it;
+# override with e.g. 'make DWARF_BACKEND=libdwarf'. This MUST match what dwarfidl
+# is compiled against -- libdwarfpp's headers switch the linkage of the dwarf_*
+# compat API on DWARFPP_USE_LIBDW -- otherwise those symbols mismatch at link
+# time (libdwarfidl.so ends up with unresolved dwarf_dealloc/dwarf_attrlist).
+DWARF_BACKEND ?= libdw
+LIBDWARFPP_CONFIGURE_FLAGS += --with-dwarf-backend=$(DWARF_BACKEND)
+
 libdwarfpp/config.status:
 	cd libdwarfpp && ./autogen.sh && \
 	$(MAKE) -C contrib && ( . contrib/env.sh && \

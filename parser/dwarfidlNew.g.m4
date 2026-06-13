@@ -185,6 +185,7 @@ KEYWORD_ATTR
 	| 'call_column'
 	| 'const_value'
 	| 'data_member_location'
+	| 'data_bit_offset'
 	| 'vtable_elem_location'
 	| 'bit_offset'
 	| 'is_optional'
