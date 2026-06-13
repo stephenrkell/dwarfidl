@@ -136,6 +136,8 @@ int main(int argc, char **argv)
 	// print to a special stream that counts lines and characters.
 	counting_ostream counting_outf(outf);
 	print_dies(counting_outf, dies, types);
+	counting_outf.flush();
+	outf.flush();
 
 	/* also test that we can parse this output, using the dwarfidlNewC parser. */
 	pANTLR3_INPUT_STREAM in_fileobj = antlr3FileStreamNew((uint8_t *) tmpname,

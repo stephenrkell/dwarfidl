@@ -119,3 +119,7 @@ parser/*_test_parser
 # Generated files
 include/dwarfidl/dwarfidlNewCLexer.h
 include/dwarfidl/dwarfidlNewCParser.h
+parser/dwarfidlNewC.g
+parser/dwarfidlSimpleC.g
+tests/dwarfprint/dwarfprint
+tests/lang-make-dies/lang-make-dies
