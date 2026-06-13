@@ -67,6 +67,14 @@ private:
 	// HACK: we used to capture this when our maybe_get_name was a lambda,
 	// but since we can't when it's a method, we need to use a local
 	pair<emit_kind, iterator_base> current_pair_transitively_closing_from;
+	/* get_concrete_type() is not memoised in libdwarfpp -- it re-walks the
+	 * typedef/qualifier chain on every call -- yet maybe_get_name() calls it
+	 * for every reference to a type during transitive closure, so the same
+	 * type's chain gets walked many times. Cache the result per DIE offset
+	 * (offsets are unique within the root we operate over). */
+	std::map<Dwarf_Off, dwarf::core::iterator_df<dwarf::core::type_die> > m_concrete_type_cache;
+	dwarf::core::iterator_df<dwarf::core::type_die> concrete_type_cached(
+		const dwarf::core::iterator_df<dwarf::core::type_die>& t);
 public:
 	//static const vector<string> default_compiler_argv;
 	dependency_ordering_cxx_target(

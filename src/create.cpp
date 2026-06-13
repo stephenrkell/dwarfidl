@@ -14,6 +14,8 @@
 #include <sstream>
 #include <vector>
 #include <exception>
+#include <fstream>
+#include <ostream>
 
 using namespace dwarf;
 using namespace dwarf::core;
@@ -31,8 +33,23 @@ using std::make_pair;
 using boost::to_lower_copy;
 using antlr::tree::Tree;
 
+/* Debug/trace output is gated behind DWARFIDL_DEBUG_LEVEL. Several of the
+ * messages below format whole parse trees (TO_STRING_TREE) or DIEs per node,
+ * which is expensive; previously this work happened on every run regardless of
+ * whether anyone was watching stderr. */
+static std::ostream& idl_debug(int msg_level = 1)
+{
+	static std::ofstream dummy;
+	static int level = []() {
+		char *level_str = getenv("DWARFIDL_DEBUG_LEVEL");
+		return level_str ? atoi(level_str) : 0;
+	}();
+	if (level >= msg_level) return cerr;
+	return dummy;
+}
 
-class ident_not_found : public exception 
+
+class ident_not_found : public exception
 {
 public:
 	string ident;
@@ -163,26 +180,39 @@ namespace dwarfidl
 	
 	iterator_base create_one_die(const iterator_base& parent, Tree *d,
 								  vector<pair<const iterator_base&, Tree*> > &postpone,
-								  const std::map<Tree *, iterator_base>& nested /* = ... */)
+								  const std::map<Tree *, iterator_base>& nested /* = ... */,
+								  created_die_cache *created_cache /* = nullptr */)
 	{
 		INIT;
 		BIND2(d, tag_keyword);
 		BIND3(d, attrs, ATTRS);
 		BIND3(d, children, CHILDREN);
-		
-		const char *tagstr = CCP(GET_TEXT(tag_keyword));
-		
-		Dwarf_Half tag = DEFAULT_DWARF_SPEC.tag_for_name((string("DW_TAG_") + tagstr).c_str());
-		
-		auto created = parent.get_root().make_new(parent, tag);
-		
+
+		/* If we postponed this node on an earlier pass we will already have a
+		 * DIE for it; reuse that rather than creating a duplicate. */
+		iterator_base created;
+		if (created_cache)
+		{
+			auto found = created_cache->find(d);
+			if (found != created_cache->end()) created = found->second;
+		}
+		if (!created)
+		{
+			const char *tagstr = CCP(GET_TEXT(tag_keyword));
+			Dwarf_Half tag = DEFAULT_DWARF_SPEC.tag_for_name((string("DW_TAG_") + tagstr).c_str());
+			created = parent.get_root().make_new(parent, tag);
+			if (created_cache) (*created_cache)[d] = created;
+		}
+
+		auto& created_attrs = dynamic_cast<core::in_memory_abstract_die&>(created.dereference()).attrs();
+
 		/* create attributes */
 		FOR_ALL_CHILDREN(attrs)
 		{
 			INIT;
 			BIND2(n, attr);
 			BIND2(n, value);
-			
+
 			string attrstr = CCP(TO_STRING(attr));
 			/*
 			 * HACK HACK HACK: 
@@ -202,28 +232,29 @@ namespace dwarfidl
 			 */
 			
 			Dwarf_Half attrnum = created.spec_here().attr_for_name(("DW_AT_" + to_lower_copy(attrstr)).c_str());
+			/* On a retry pass this attribute may already have been created
+			 * successfully before we hit the unresolved one; don't redo it. */
+			if (created_attrs.find(attrnum) != created_attrs.end()) continue;
 			try {
 				encap::attribute_value v = make_attribute_value(value, created, attrnum, nested);
 				// FIXME HACK
 				if (attrnum == DW_AT_type) 
 				{
-					if (v.is_address()) 
+					if (v.is_address())
 					{
-						cerr << "checking addr != 0..." << endl;
+						idl_debug() << "checking addr != 0..." << endl;
 						assert(v.get_address().addr != 0);
 					}
 					if (v.is_ref())
 					{
-						cerr << "checking ref != 0..." << endl;
+						idl_debug() << "checking ref != 0..." << endl;
 						assert(v.get_ref().off != 0);
 					}
 				}
 
-				dynamic_cast<core::in_memory_abstract_die&>(created.dereference())
-					.attrs()
-					.insert(make_pair(attrnum, v));
+				created_attrs.insert(make_pair(attrnum, v));
 			} catch (ident_not_found const &e) {
-				cerr << "Ident not found: '" << e.what() << "', postponing to next pass" << endl;
+				idl_debug() << "Ident not found: '" << e.what() << "', postponing to next pass" << endl;
 				postpone.push_back(pair<const iterator_base&, Tree*>(parent, d));
 				return parent.root().end();
 			}
@@ -240,9 +271,10 @@ namespace dwarfidl
 	
 	iterator_base create_one_die_with_children(const iterator_base& parent,
 												Tree *d,
-												vector<pair<const iterator_base&, Tree*> > &postpone)
+												vector<pair<const iterator_base&, Tree*> > &postpone,
+												created_die_cache *created_cache /* = nullptr */)
 	{
-		cerr << "Creating a DIE from " << CCP(TO_STRING_TREE(d)) << endl;
+		idl_debug() << "Creating a DIE from " << CCP(TO_STRING_TREE(d)) << endl;
 
 		INIT;
 		BIND2(d, tag_keyword);
@@ -262,7 +294,7 @@ namespace dwarfidl
 					case TOKEN(DIE): {
 						/* It's an inline DIE: we need to find a matching DIE or create it.
 						 * If we create it, create it as a sibling */
-						iterator_base sub_die = find_or_create_die(parent, value, postpone);
+						iterator_base sub_die = find_or_create_die(parent, value, postpone, created_cache);
 						nested[value] = sub_die;
 					} break;
 					case TOKEN(IDENT): {
@@ -275,7 +307,7 @@ namespace dwarfidl
 						iterator_base found = parent.root().scoped_resolve(parent, 
 							name.begin(), name.end());
 						if (!found) {
-							 cerr << "Could not resolve name " << CCP(TO_STRING_TREE(value)) << ", postponing to next pass" << endl;
+							 idl_debug() << "Could not resolve name " << CCP(TO_STRING_TREE(value)) << ", postponing to next pass" << endl;
 							 postpone.push_back(pair<const iterator_base&, Tree*>(parent, d));
 							 return parent.root().end();
 						}
@@ -283,29 +315,38 @@ namespace dwarfidl
 						break;
 					}
 					default:
-						cerr << "Subtree " << CCP(TO_STRING_TREE(value)) 
+						idl_debug() << "Subtree " << CCP(TO_STRING_TREE(value))
 							<< " is not a nested DIE" << endl;
 						break;
 				}
 			}
 		}
 
-		auto created = create_one_die(parent, d, postpone, nested);
-		
-		FOR_ALL_CHILDREN(children)
+		auto created = create_one_die(parent, d, postpone, nested, created_cache);
+
+		/* If create_one_die postponed (returned end), don't descend into the
+		 * children: with the cache active we would otherwise create them under
+		 * an end parent and cache them mis-parented. We'll create them on the
+		 * retry pass once this DIE itself succeeds. Without a cache, preserve
+		 * the original (unconditional) behaviour. */
+		if (created || !created_cache)
 		{
-			create_one_die_with_children(created, n, postpone);
+			FOR_ALL_CHILDREN(children)
+			{
+				create_one_die_with_children(created, n, postpone, created_cache);
+			}
 		}
-		
+
 		return created;
 	}
 
-	iterator_base find_or_create_die(const iterator_base& parent, Tree *ast, std::vector<std::pair<const iterator_base&, antlr::tree::Tree*> > &postpone)
+	iterator_base find_or_create_die(const iterator_base& parent, Tree *ast, std::vector<std::pair<const iterator_base&, antlr::tree::Tree*> > &postpone,
+									 created_die_cache *created_cache /* = nullptr */)
 	{
 		/* Sometimes we can search for an existing DIE. But currently we blindly
 		 * re-create DIEs that might already be existing. */
 		// auto found = parent.root().scoped_resolve(
-		return create_one_die_with_children(parent, ast, postpone);
+		return create_one_die_with_children(parent, ast, postpone, created_cache);
 	}
 
 	iterator_base create_dies(Tree *ast) {
@@ -321,7 +362,7 @@ namespace dwarfidl
 		/* Walk the tree. Create any DIE we see. We also have to
 		 * scan attrs and create any that are inlined and do not
 		 * already exist. */
-		cerr << "Got AST: " << CCP(TO_STRING_TREE(ast)) << endl;
+		idl_debug() << "Got AST: " << CCP(TO_STRING_TREE(ast)) << endl;
 		iterator_base first_created;
 		iterator_df<> real_parent;
 
@@ -330,7 +371,7 @@ namespace dwarfidl
 			// pre-pass: grab the first DIE's tag keyword
 			FOR_ALL_CHILDREN(ast)
 			{
-				cerr << "Got a node: " << CCP(TO_STRING_TREE(n)) << endl;
+				idl_debug() << "Got a node: " << CCP(TO_STRING_TREE(n)) << endl;
 				SELECT_ONLY(DIE);
 				INIT;
 				BIND2(n, tag_keyword);
@@ -350,16 +391,20 @@ namespace dwarfidl
 		} else real_parent = parent;
 
 		vector<pair<const iterator_base&, Tree*> > postpone;
-		
+		/* Cache of DIEs created per AST node, shared across the initial and
+		 * postponed passes so that retrying a postponed DIE reuses the DIE we
+		 * already created for it instead of making a duplicate. */
+		created_die_cache created_cache;
+
 		// Initial pass: go straight from AST
 		FOR_ALL_CHILDREN(ast)
 		{
-			cerr << "Got a node: " << CCP(TO_STRING_TREE(n)) << endl;
+			idl_debug() << "Got a node: " << CCP(TO_STRING_TREE(n)) << endl;
 			SELECT_ONLY(DIE);
 			INIT;
 			BIND2(n, tag_keyword);
-			
-			auto created = create_one_die_with_children(real_parent, n, postpone);
+
+			auto created = create_one_die_with_children(real_parent, n, postpone, &created_cache);
 			if (!first_created) first_created = created;
 
 			if (getenv("DEBUG_CC")) cerr << "Created one DIE and its children; we now have: " << endl << parent.root();
@@ -372,7 +417,7 @@ namespace dwarfidl
 		// or failed to do so
 		int postponed_pass_n = 0;
 		while (postpone.size() > 0) {
-			 cerr << "=== POSTPONED PASS " << ++postponed_pass_n << " ===" << endl;
+			 idl_debug() << "=== POSTPONED PASS " << ++postponed_pass_n << " ===" << endl;
 			 
 			 auto old_size = postpone.size();
 			 auto old_postpone = postpone;
@@ -380,7 +425,7 @@ namespace dwarfidl
 			 for (auto iter = old_postpone.begin(); iter != old_postpone.end(); iter++) {
 				  auto postponed_parent = iter->first;
 				  auto postponed_tree = iter->second;
-				  create_one_die_with_children(postponed_parent, postponed_tree, postpone);
+				  create_one_die_with_children(postponed_parent, postponed_tree, postpone, &created_cache);
 			 }
 			 auto new_size = postpone.size();
 			 assert(old_size > new_size);
