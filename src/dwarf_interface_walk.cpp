@@ -49,21 +49,25 @@ using std::function;
 
 namespace dwarf { namespace tool {
 
-void my_walk_type(iterator_df<type_die> t, iterator_df<program_element_die> reason, 
-	const function<bool(iterator_df<type_die>, iterator_df<program_element_die>)>& pre_f, 
+void my_walk_type(iterator_df<type_die> t, iterator_df<program_element_die> reason,
+	const function<bool(iterator_df<type_die>, iterator_df<program_element_die>)>& pre_f,
 	const function<void(iterator_df<type_die>, iterator_df<program_element_die>)>& post_f
 	= std::function<void(iterator_df<type_die>, iterator_df<program_element_die>)>(),
-	const type_set& currently_walking = type_set()
+	const dieloc_set& currently_walking = dieloc_set()
 )
 {
-	if (currently_walking.find(t) != currently_walking.end()) return; // "grey node"
+	/* Cycle detection must use DIE *identity* (offset), not structural type
+	 * equality, to prevent stack blowup in deeply nested types (C++ templates, etc...)
+	 */
+	auto key = !t ? opt<Dwarf_Off>() : opt<Dwarf_Off>(t.offset_here());
+	if (currently_walking.find(key) != currently_walking.end()) return; // "grey node"
 
 	bool continue_recursing;
 	if (pre_f) continue_recursing = pre_f(t, reason); // i.e. we do walk "void"
 	else continue_recursing = true;
 
-	type_set next_currently_walking = currently_walking; 
-	next_currently_walking.insert(t);
+	dieloc_set next_currently_walking = currently_walking;
+	next_currently_walking.insert(key);
 
 	if (continue_recursing)
 	{
@@ -111,7 +115,7 @@ void my_walk_type(iterator_df<type_die> t, iterator_df<program_element_die> reas
 		else if (t.is_a<type_describing_subprogram_die>())
 		{
 			auto sub_t = t.as_a<type_describing_subprogram_die>();
-			my_walk_type(sub_t->find_type(), sub_t, pre_f, post_f);
+			my_walk_type(sub_t->find_type(), sub_t, pre_f, post_f, next_currently_walking);
 			auto fps = sub_t.children().subseq_of<formal_parameter_die>();
 			for (auto i_fp = fps.first; i_fp != fps.second; ++i_fp)
 			{
